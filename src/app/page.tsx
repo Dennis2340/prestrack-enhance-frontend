@@ -103,7 +103,7 @@ export default async function Home() {
                 </p>
 
                 <Button asChild className="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white">
-                  <Link href="/admin">
+                  <Link href="/api/auth/register">
                     Enter Admin <ArrowRight className="ml-2 w-4 h-4" />
                   </Link>
                 </Button>

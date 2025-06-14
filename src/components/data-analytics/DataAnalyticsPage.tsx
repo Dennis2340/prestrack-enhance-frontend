@@ -5,8 +5,8 @@ import FileUploadCard from '@/components/data-analytics/FileUploadCard';
 import InsightsDashboard from '@/components/data-analytics/InsightsDashboard';
 import { UploadResponse, InsightsResponse, InsightsData } from '@/types/data-analytics';
 
-const UPLOAD_API_URL = 'http://localhost:3600/upload';
-const INSIGHTS_API_URL_BASE = 'http://localhost:3600/insights';
+const UPLOAD_API_URL = process.env.NEXT_PUBLIC_DATA_ENDPOINT || 'http://localhost:3600/upload';
+const INSIGHTS_API_URL_BASE = process.env.NEXT_PUBLIC_INSIGHTS_API_URL_BASE || 'http://localhost:3600/insights';
 const POLLING_INTERVAL = 5000; // 5 seconds
 const MAX_POLL_ATTEMPTS = 36; // 36 attempts * 5s = 180s (3 minutes) total polling time
 

@@ -222,20 +222,20 @@ const JoinChat: React.FC = () => {
               <div className="flex items-center space-x-2 mb-4">
                 <MessageCircle className="w-6 h-6 text-teal-600" />
                 <span className="text-sm font-medium bg-teal-100 text-teal-800 px-3 py-1 rounded-full">
-                  Live Support
+                  Live Doctor Support
                 </span>
               </div>
 
               <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
                 Get assistance from our{" "}
                 <span className="bg-gradient-to-r from-teal-600 to-green-600 bg-clip-text text-transparent">
-                  expert team
+                  Doctors
                 </span>
               </h1>
 
               <p className="text-gray-600 mb-8 text-lg">
-                Connect with our support agents or AI assistant to get immediate
-                help with your inquiries, account issues, or financial
+                Connect with our support care providers or AI assistant to get immediate
+                help with your inquiries, complications, or medical
                 questions.
               </p>
 
@@ -247,7 +247,7 @@ const JoinChat: React.FC = () => {
                   <div className="ml-3">
                     <p className="text-gray-800 font-medium">Real-time Chat</p>
                     <p className="text-gray-600 text-sm">
-                      Instant responses from our support team
+                      Instant responses from our Doctors
                     </p>
                   </div>
                 </div>
@@ -273,7 +273,7 @@ const JoinChat: React.FC = () => {
                   <div className="ml-3">
                     <p className="text-gray-800 font-medium">24/7 Assistance</p>
                     <p className="text-gray-600 text-sm">
-                      Our AI is available even when human agents are offline
+                      Our AI is available even when human Doctors are offline
                     </p>
                   </div>
                 </div>
