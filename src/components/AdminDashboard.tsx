@@ -24,6 +24,7 @@ import {
   Filter,
   ArrowUpDown,
   CircleAlert,
+  BarChart2,
 } from "lucide-react";
 import { toast } from "sonner";
 import AddAgentForm from "./AddAgentForm";
@@ -38,6 +39,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import Link from "next/link";
 
 interface AgentPresence {
   isOnline: boolean;
@@ -96,40 +98,26 @@ const SkeletonCard: React.FC = () => (
 const AdminDashboard: React.FC = () => {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
-  const [selectedRoomMessages, setSelectedRoomMessages] = useState<Message[]>(
-    []
-  );
+  const [selectedRoomMessages, setSelectedRoomMessages] = useState<Message[]>([]);
   const [showAddAgentModal, setShowAddAgentModal] = useState(false);
   const [showRoomModal, setShowRoomModal] = useState(false);
   const [isLoadingAgents, setIsLoadingAgents] = useState(true);
   const [isLoadingRooms, setIsLoadingRooms] = useState(true);
-  const [showDeleteAgentConfirm, setShowDeleteAgentConfirm] = useState<
-    string | null
-  >(null);
-  const [showDeleteRoomConfirm, setShowDeleteRoomConfirm] = useState<
-    string | null
-  >(null);
+  const [showDeleteAgentConfirm, setShowDeleteAgentConfirm] = useState<string | null>(null);
+  const [showDeleteRoomConfirm, setShowDeleteRoomConfirm] = useState<string | null>(null);
   const [agentSearchQuery, setAgentSearchQuery] = useState("");
   const [roomSearchQuery, setRoomSearchQuery] = useState("");
-  const [roomStatusFilter, setRoomStatusFilter] = useState<
-    "all" | "active" | "closed"
-  >("all");
+  const [roomStatusFilter, setRoomStatusFilter] = useState<"all" | "active" | "closed">("all");
   const [agentSort, setAgentSort] = useState<"name" | "email">("name");
-  const [roomSort, setRoomSort] = useState<"newest" | "oldest" | "messages">(
-    "newest"
-  );
+  const [roomSort, setRoomSort] = useState<"newest" | "oldest" | "messages">("newest");
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
   const socketRef = useRef<Socket | null>(null);
 
-  // Fetch all agents for the current business
   const fetchAgents = async () => {
     setIsLoadingAgents(true);
     try {
-      const response = await fetch(
-        `/api/agent/list?businessId=${BUSINESS_CONFIG.businessId}`
-      );
+      const response = await fetch(`/api/agent/list?businessId=${BUSINESS_CONFIG.businessId}`);
       const data = await response.json();
-
       setAgents(data.agents);
     } catch (err) {
       toast("Error! Failed to load agents");
@@ -139,13 +127,10 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
-  // Fetch all rooms for the current business
   const fetchRooms = async () => {
     setIsLoadingRooms(true);
     try {
-      const response = await fetch(
-        `/api/rooms?businessId=${BUSINESS_CONFIG.businessId}`
-      );
+      const response = await fetch(`/api/rooms?businessId=${BUSINESS_CONFIG.businessId}`);
       const data = await response.json();
       setRooms(data.rooms);
     } catch (err) {
@@ -156,13 +141,10 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
-  // Fetch messages for a specific room
   const fetchRoomMessages = async (roomId: string) => {
     try {
       setSelectedRoomId(roomId);
-      const response = await fetch(
-        `/api/rooms/${roomId}?businessId=${BUSINESS_CONFIG.businessId}`
-      );
+      const response = await fetch(`/api/rooms/${roomId}?businessId=${BUSINESS_CONFIG.businessId}`);
       const data = await response.json();
       setSelectedRoomMessages(data.messages);
       setShowRoomModal(true);
@@ -172,7 +154,6 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
-  // Socket setup and initial data fetch
   useEffect(() => {
     fetchAgents();
     fetchRooms();
@@ -202,14 +183,12 @@ const AdminDashboard: React.FC = () => {
     socket.on("newMessage", (message: Message & { roomId: string }) => {
       setRooms((prev) =>
         prev.map((room) =>
-          room.id === message.roomId &&
-          room.businessId === BUSINESS_CONFIG.businessId
+          room.id === message.roomId && room.businessId === BUSINESS_CONFIG.businessId
             ? { ...room, messages: [message, ...room.messages].slice(0, 1) }
             : room
         )
       );
 
-      // If this message belongs to the currently viewed room, update the messages
       if (selectedRoomId === message.roomId) {
         setSelectedRoomMessages((prev) => [message, ...prev]);
       }
@@ -225,14 +204,12 @@ const AdminDashboard: React.FC = () => {
     };
   }, [selectedRoomId]);
 
-  // Handle agent addition
   const handleAgentAdded = () => {
     fetchAgents();
     setShowAddAgentModal(false);
     toast("Success! Agent added successfully");
   };
 
-  // Handle agent deletion
   const handleDeleteAgent = (id: string) => {
     setShowDeleteAgentConfirm(id);
   };
@@ -240,12 +217,9 @@ const AdminDashboard: React.FC = () => {
   const confirmDeleteAgent = async () => {
     if (!showDeleteAgentConfirm) return;
     try {
-      const response = await fetch(
-        `/api/agent/delete/${showDeleteAgentConfirm}`,
-        {
-          method: "DELETE",
-        }
-      );
+      const response = await fetch(`/api/agent/delete/${showDeleteAgentConfirm}`, {
+        method: "DELETE",
+      });
       if (response.ok) {
         fetchAgents();
         toast("Agent deleted successfully");
@@ -260,7 +234,6 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
-  // Handle room deletion
   const handleDeleteRoom = (roomId: string) => {
     setShowDeleteRoomConfirm(roomId);
   };
@@ -272,9 +245,7 @@ const AdminDashboard: React.FC = () => {
         method: "DELETE",
       });
       if (response.ok) {
-        setRooms((prev) =>
-          prev.filter((room) => room.id !== showDeleteRoomConfirm)
-        );
+        setRooms((prev) => prev.filter((room) => room.id !== showDeleteRoomConfirm));
         toast("Room deleted successfully");
       } else {
         toast("Failed to delete room");
@@ -287,14 +258,10 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
-  // Trim message content for display
   const trimMessage = (content: string, maxLength: number = 50) => {
-    return content.length <= maxLength
-      ? content
-      : content.slice(0, maxLength) + "…";
+    return content.length <= maxLength ? content : content.slice(0, maxLength) + "…";
   };
 
-  // Filter and sort agents
   const filteredAgents = agents
     .filter((agent) => {
       if (!agentSearchQuery) return true;
@@ -308,7 +275,6 @@ const AdminDashboard: React.FC = () => {
       return a.email.localeCompare(b.email);
     });
 
-  // Filter and sort rooms
   const filteredRooms = rooms
     .filter((room) => {
       let statusMatch = true;
@@ -323,8 +289,7 @@ const AdminDashboard: React.FC = () => {
       const searchLower = roomSearchQuery.toLowerCase();
 
       return (
-        statusMatch &&
-        (guestName.includes(searchLower) || roomId.includes(searchLower))
+        statusMatch && (guestName.includes(searchLower) || roomId.includes(searchLower))
       );
     })
     .sort((a, b) => {
@@ -369,9 +334,17 @@ const AdminDashboard: React.FC = () => {
               <MessageSquare className="h-4 w-4 mr-2" />
               Support Rooms
             </TabsTrigger>
+            <Link href="/admin/data-analytics">
+              <TabsTrigger
+                value="analytics"
+                className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-green-500 data-[state=active]:to-teal-500 data-[state=active]:text-white"
+              >
+                <BarChart2 className="h-4 w-4 mr-2" />
+                Data Analytics
+              </TabsTrigger>
+            </Link>
           </TabsList>
 
-          {/* Agents Tab */}
           <TabsContent value="agents" className="space-y-6">
             <div className="flex flex-col md:flex-row justify-between items-center gap-4">
               <div className="relative w-full md:w-1/2">
@@ -386,12 +359,8 @@ const AdminDashboard: React.FC = () => {
               <div className="flex items-center gap-2 w-full md:w-auto">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className="flex items-center gap-2"
-                    >
-                      <ArrowUpDown className="h-4 w-4" /> Sort by{" "}
-                      {agentSort === "name" ? "Name" : "Email"}
+                    <Button variant="outline" className="flex items-center gap-2">
+                      <ArrowUpDown className="h-4 w-4" /> Sort by {agentSort === "name" ? "Name" : "Email"}
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent>
@@ -403,10 +372,7 @@ const AdminDashboard: React.FC = () => {
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
-                <Dialog
-                  open={showAddAgentModal}
-                  onOpenChange={setShowAddAgentModal}
-                >
+                <Dialog open={showAddAgentModal} onOpenChange={setShowAddAgentModal}>
                   <DialogTrigger asChild>
                     <Button className="bg-gradient-to-r from-green-500 to-teal-500 text-white hover:from-green-600 hover:to-teal-600 transition-all duration-300 flex items-center gap-2">
                       <UserPlus size={16} /> Add Agent
@@ -414,14 +380,9 @@ const AdminDashboard: React.FC = () => {
                   </DialogTrigger>
                   <DialogContent className="bg-white rounded-lg shadow-md">
                     <DialogHeader>
-                      <DialogTitle className="text-gray-800">
-                        Add New Agent
-                      </DialogTitle>
+                      <DialogTitle className="text-gray-800">Add New Agent</DialogTitle>
                     </DialogHeader>
-                    <AddAgentForm
-                      onAgentAdded={handleAgentAdded}
-                      onClose={() => setShowAddAgentModal(false)}
-                    />
+                    <AddAgentForm onAgentAdded={handleAgentAdded} onClose={() => setShowAddAgentModal(false)} />
                   </DialogContent>
                 </Dialog>
               </div>
@@ -429,20 +390,14 @@ const AdminDashboard: React.FC = () => {
 
             {isLoadingAgents ? (
               <div className="space-y-4">
-                {Array(3)
-                  .fill(0)
-                  .map((_, i) => (
-                    <SkeletonCard key={i} />
-                  ))}
+                {Array(3).fill(0).map((_, i) => <SkeletonCard key={i} />)}
               </div>
             ) : filteredAgents.length === 0 ? (
               <Card className="bg-gray-50 p-6 text-center">
                 <div className="flex flex-col items-center justify-center text-gray-500">
                   <Users className="h-12 w-12 mb-2 opacity-50" />
                   <p className="text-lg font-medium">No agents found</p>
-                  <p className="text-sm">
-                    Try adjusting your search or add a new agent
-                  </p>
+                  <p className="text-sm">Try adjusting your search or add a new agent</p>
                 </div>
               </Card>
             ) : (
@@ -455,48 +410,30 @@ const AdminDashboard: React.FC = () => {
                     <div className="flex flex-col md:flex-row justify-between md:items-center gap-3">
                       <div className="flex items-start md:items-center gap-3">
                         <div className="h-10 w-10 rounded-full bg-gradient-to-r from-green-500 to-teal-500 flex items-center justify-center text-white font-medium">
-                          {agent.name
-                            .split(" ")
-                            .map((n) => n[0])
-                            .join("")
-                            .toUpperCase()
-                            .substring(0, 2)}
+                          {agent.name.split(" ").map((n) => n[0]).join("").toUpperCase().substring(0, 2)}
                         </div>
                         <div>
-                          <h3 className="font-medium text-gray-800">
-                            {agent.name}
-                          </h3>
+                          <h3 className="font-medium text-gray-800">{agent.name}</h3>
                           <div className="flex flex-col mt-2 space-y-1">
                             <div className="flex items-center gap-2">
-                              <h3 className="text-sm font-semibold text-gray-700">
-                                Online Status:
-                              </h3>
+                              <h3 className="text-sm font-semibold text-gray-700">Online Status:</h3>
                               <span
                                 className={`text-sm font-medium px-2 py-0.5 rounded-full ${
-                                  agent?.AgentPresence?.isOnline
-                                    ? "bg-green-100 text-green-700"
-                                    : "bg-red-100 text-red-700"
+                                  agent?.AgentPresence?.isOnline ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
                                 }`}
                               >
-                                {agent?.AgentPresence?.isOnline
-                                  ? "Online ✅"
-                                  : "Offline ❌"}
+                                {agent?.AgentPresence?.isOnline ? "Online ✅" : "Offline ❌"}
                               </span>
                             </div>
                             <div className="flex items-center gap-2">
-                              <h3 className="text-sm font-semibold text-gray-700">
-                                Last Seen:
-                              </h3>
+                              <h3 className="text-sm font-semibold text-gray-700">Last Seen:</h3>
                               <span className="text-sm text-gray-600">
                                 {agent?.AgentPresence?.lastSeen
-                                  ? new Date(
-                                      agent.AgentPresence.lastSeen
-                                    ).toLocaleString()
+                                  ? new Date(agent.AgentPresence.lastSeen).toLocaleString()
                                   : "N/A"}
                               </span>
                             </div>
                           </div>
-
                           <p className="text-sm text-gray-600">{agent.email}</p>
                           <Badge variant="outline" className="mt-1 text-xs">
                             ID: {agent.agentId.substring(0, 8)}
@@ -516,7 +453,6 @@ const AdminDashboard: React.FC = () => {
             )}
           </TabsContent>
 
-          {/* Rooms Tab */}
           <TabsContent value="rooms" className="space-y-6">
             <div className="flex flex-col md:flex-row justify-between items-center gap-4">
               <div className="relative w-full md:w-1/2">
@@ -531,60 +467,28 @@ const AdminDashboard: React.FC = () => {
               <div className="flex items-center gap-2 w-full md:w-auto flex-wrap">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className="flex items-center gap-2"
-                    >
+                    <Button variant="outline" className="flex items-center gap-2">
                       <Filter className="h-4 w-4" />
-                      {roomStatusFilter === "all"
-                        ? "All Rooms"
-                        : roomStatusFilter === "active"
-                        ? "Active Rooms"
-                        : "Closed Rooms"}
+                      {roomStatusFilter === "all" ? "All Rooms" : roomStatusFilter === "active" ? "Active Rooms" : "Closed Rooms"}
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent>
-                    <DropdownMenuItem
-                      onClick={() => setRoomStatusFilter("all")}
-                    >
-                      All Rooms
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => setRoomStatusFilter("active")}
-                    >
-                      Active Rooms
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => setRoomStatusFilter("closed")}
-                    >
-                      Closed Rooms
-                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setRoomStatusFilter("all")}>All Rooms</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setRoomStatusFilter("active")}>Active Rooms</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setRoomStatusFilter("closed")}>Closed Rooms</DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className="flex items-center gap-2"
-                    >
+                    <Button variant="outline" className="flex items-center gap-2">
                       <ArrowUpDown className="h-4 w-4" />
-                      {roomSort === "newest"
-                        ? "Newest First"
-                        : roomSort === "oldest"
-                        ? "Oldest First"
-                        : "Most Messages"}
+                      {roomSort === "newest" ? "Newest First" : roomSort === "oldest" ? "Oldest First" : "Most Messages"}
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent>
-                    <DropdownMenuItem onClick={() => setRoomSort("newest")}>
-                      Newest First
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setRoomSort("oldest")}>
-                      Oldest First
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setRoomSort("messages")}>
-                      Most Messages
-                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setRoomSort("newest")}>Newest First</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setRoomSort("oldest")}>Oldest First</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setRoomSort("messages")}>Most Messages</DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
@@ -592,20 +496,14 @@ const AdminDashboard: React.FC = () => {
 
             {isLoadingRooms ? (
               <div className="space-y-4">
-                {Array(3)
-                  .fill(0)
-                  .map((_, i) => (
-                    <SkeletonCard key={i} />
-                  ))}
+                {Array(3).fill(0).map((_, i) => <SkeletonCard key={i} />)}
               </div>
             ) : filteredRooms.length === 0 ? (
               <Card className="bg-gray-50 p-6 text-center">
                 <div className="flex flex-col items-center justify-center text-gray-500">
                   <MessageSquare className="h-12 w-12 mb-2 opacity-50" />
                   <p className="text-lg font-medium">No rooms found</p>
-                  <p className="text-sm">
-                    Try adjusting your search or filter settings
-                  </p>
+                  <p className="text-sm">Try adjusting your search or filter settings</p>
                 </div>
               </Card>
             ) : (
@@ -618,14 +516,10 @@ const AdminDashboard: React.FC = () => {
                     <div className="flex flex-col md:flex-row justify-between gap-4">
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-2">
-                          <h3 className="font-medium text-gray-800">
-                            {room.name || `Room ${room.id.substring(0, 8)}`}
-                          </h3>
+                          <h3 className="font-medium text-gray-800">{room.name || `Room ${room.id.substring(0, 8)}`}</h3>
                           <Badge
                             className={`${
-                              room.status === "active"
-                                ? "bg-gradient-to-r from-green-500 to-teal-500"
-                                : "bg-gray-500"
+                              room.status === "active" ? "bg-gradient-to-r from-green-500 to-teal-500" : "bg-gray-500"
                             } text-white border-0`}
                           >
                             {room.status === "active" ? (
@@ -641,31 +535,21 @@ const AdminDashboard: React.FC = () => {
 
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-2 mb-3">
                           <div>
-                            <p className="text-sm font-medium text-gray-700">
-                              Guest:
-                            </p>
+                            <p className="text-sm font-medium text-gray-700">Guest:</p>
                             <p className="text-sm text-gray-600">
                               {room.guest?.name || "Unknown Guest"}
                               {room.guest?.email && (
-                                <span className="text-xs text-gray-500 block">
-                                  {room.guest.email}
-                                </span>
+                                <span className="text-xs text-gray-500 block">{room.guest.email}</span>
                               )}
                             </p>
                           </div>
 
                           <div>
-                            <p className="text-sm font-medium text-gray-700">
-                              Active Agents: {room.activeAgents.length}
-                            </p>
+                            <p className="text-sm font-medium text-gray-700">Active Agents: {room.activeAgents.length}</p>
                             {room.activeAgents.length > 0 ? (
                               <div className="flex flex-wrap gap-1 mt-1">
                                 {room.activeAgents.map((agent) => (
-                                  <Badge
-                                    key={agent.id}
-                                    variant="outline"
-                                    className="text-xs font-normal"
-                                  >
+                                  <Badge key={agent.id} variant="outline" className="text-xs font-normal">
                                     {agent.name || "Unknown"}
                                   </Badge>
                                 ))}
@@ -680,16 +564,10 @@ const AdminDashboard: React.FC = () => {
                           <div className="mt-2 p-2 bg-gray-50 rounded-md border border-gray-100">
                             <p className="text-xs text-gray-500 mb-1 flex items-center gap-1">
                               <Clock className="h-3 w-3" />
-                              Latest message (
-                              {new Date(
-                                room.messages[0].timestamp
-                              ).toLocaleTimeString()}
-                              )
+                              Latest message ({new Date(room.messages[0].timestamp).toLocaleTimeString()})
                             </p>
                             <p className="text-sm text-gray-700">
-                              <span className="font-medium">
-                                {room.messages[0].sender?.name || "Unknown"}:
-                              </span>{" "}
+                              <span className="font-medium">{room.messages[0].sender?.name || "Unknown"}:</span>{" "}
                               {trimMessage(room.messages[0].content, 100)}
                             </p>
                           </div>
@@ -717,9 +595,12 @@ const AdminDashboard: React.FC = () => {
               </div>
             )}
           </TabsContent>
+
+          <TabsContent value="analytics" className="space-y-6">
+            <p className="text-gray-600">Redirecting to Data Analytics page...</p>
+          </TabsContent>
         </Tabs>
 
-        {/* Room Messages Dialog */}
         <Dialog open={showRoomModal} onOpenChange={setShowRoomModal}>
           <DialogContent className="bg-white rounded-lg shadow-md max-w-3xl">
             <DialogHeader>
@@ -763,17 +644,12 @@ const AdminDashboard: React.FC = () => {
                       <div className="flex items-center gap-2 mb-1">
                         <span
                           className={`font-medium ${
-                            msg.senderType === "guest"
-                              ? "text-gray-800"
-                              : "text-green-600"
+                            msg.senderType === "guest" ? "text-gray-800" : "text-green-600"
                           }`}
                         >
                           {msg.sender?.name || "Unknown"}
                         </span>
-                        <Badge
-                          variant="outline"
-                          className="text-xs font-normal"
-                        >
+                        <Badge variant="outline" className="text-xs font-normal">
                           {msg.senderType}
                         </Badge>
                         <span className="text-xs text-gray-400 ml-auto">
@@ -799,11 +675,7 @@ const AdminDashboard: React.FC = () => {
           </DialogContent>
         </Dialog>
 
-        {/* Delete Agent Confirmation Dialog */}
-        <Dialog
-          open={!!showDeleteAgentConfirm}
-          onOpenChange={() => setShowDeleteAgentConfirm(null)}
-        >
+        <Dialog open={!!showDeleteAgentConfirm} onOpenChange={() => setShowDeleteAgentConfirm(null)}>
           <DialogContent className="bg-white rounded-lg shadow-md">
             <DialogHeader>
               <DialogTitle className="text-gray-800 flex items-center gap-2">
@@ -812,8 +684,7 @@ const AdminDashboard: React.FC = () => {
               </DialogTitle>
             </DialogHeader>
             <p className="text-gray-600">
-              Are you sure you want to delete this agent? This action cannot be
-              undone.
+              Are you sure you want to delete this agent? This action cannot be undone.
             </p>
             <div className="flex justify-end gap-2 mt-4">
               <Button
@@ -833,45 +704,7 @@ const AdminDashboard: React.FC = () => {
           </DialogContent>
         </Dialog>
 
-        {/* Delete Agent Confirmation Dialog */}
-        <Dialog
-          open={!!showDeleteAgentConfirm}
-          onOpenChange={() => setShowDeleteAgentConfirm(null)}
-        >
-          <DialogContent className="bg-white rounded-lg shadow-md">
-            <DialogHeader>
-              <DialogTitle className="text-gray-800 flex items-center gap-2">
-                <Trash2 className="h-5 w-5 text-red-500" />
-                Confirm Agent Deletion
-              </DialogTitle>
-            </DialogHeader>
-            <p className="text-gray-600">
-              Are you sure you want to delete this agent? This action cannot be
-              undone.
-            </p>
-            <div className="flex justify-end gap-2 mt-4">
-              <Button
-                variant="outline"
-                className="text-gray-600 border-gray-300 hover:bg-gray-100"
-                onClick={() => setShowDeleteAgentConfirm(null)}
-              >
-                Cancel
-              </Button>
-              <Button
-                className="bg-gradient-to-r from-red-500 to-red-600 text-white hover:from-red-600 hover:to-red-700 transition-all duration-300"
-                onClick={confirmDeleteAgent}
-              >
-                Delete
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
-
-        {/* Delete Room Confirmation Dialog */}
-        <Dialog
-          open={!!showDeleteRoomConfirm}
-          onOpenChange={() => setShowDeleteRoomConfirm(null)}
-        >
+        <Dialog open={!!showDeleteRoomConfirm} onOpenChange={() => setShowDeleteRoomConfirm(null)}>
           <DialogContent className="bg-white rounded-lg shadow-md">
             <DialogHeader>
               <DialogTitle className="text-gray-800 flex items-center gap-2">
@@ -880,8 +713,7 @@ const AdminDashboard: React.FC = () => {
               </DialogTitle>
             </DialogHeader>
             <p className="text-gray-600">
-              Are you sure you want to delete this room? This will remove all
-              messages and disconnect users.
+              Are you sure you want to delete this room? This will remove all messages and disconnect users.
             </p>
             <div className="flex justify-end gap-2 mt-4">
               <Button
