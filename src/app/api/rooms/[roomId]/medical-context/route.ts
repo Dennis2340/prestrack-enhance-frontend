@@ -43,10 +43,7 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: "Room ID and Business ID are required" }, { status: 400 });
     }
 
-    const session = await auth();
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    
 
     const data = await request.json();
     const { pregnancyStatus, gestationalAge, dueDate, highRisk, conditions, medications } = data;
