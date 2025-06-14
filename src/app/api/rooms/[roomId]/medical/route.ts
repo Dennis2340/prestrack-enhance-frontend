@@ -61,11 +61,11 @@ export async function POST(
 
 export async function PUT(
   request: Request,
-  { params }: { params: { roomId: string } }
+  { params }: { params: Promise<{ roomId: string }> }
 ) {
   // Your existing PUT handler (unchanged)
   try {
-    const { roomId } = params;
+    const { roomId } = await params;
     
 
     if (!roomId || !BUSINESS_CONFIG.businessId) {
