@@ -363,9 +363,9 @@ const AgentNavbar = () => {
                         (notification) => {
                           if (activeTab === "all") return true;
                           if (activeTab === "unread")
-                            return !hasAgentReadNotification(notification);
+                            return !hasAgentReadNotification(notification as any);
                           if (activeTab === "read")
-                            return hasAgentReadNotification(notification);
+                            return hasAgentReadNotification(notification as any);
                           return true;
                         }
                       );
@@ -374,8 +374,9 @@ const AgentNavbar = () => {
                         return (
                           <div className="divide-y divide-gray-100">
                             {filteredNotifications.map((notification) => {
+                              
                               const isRead =
-                                hasAgentReadNotification(notification);
+                                hasAgentReadNotification(notification as any);
 
                               return (
                                 <div
@@ -441,7 +442,8 @@ const AgentNavbar = () => {
                                   <div className="flex justify-between items-center">
                                     <p className="text-xs text-gray-500 flex items-center">
                                       <Clock className="h-3 w-3 mr-1" />
-                                      {notification.time}
+                                      
+                                      {notification.time as any}
                                     </p>
                                     {!isRead && (
                                       <div className="text-xs text-teal-500 flex items-center font-medium">
