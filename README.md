@@ -1,43 +1,46 @@
-Sure! Here's the complete markdown content without the extra string formatting — ready to be saved as a `README.md` file:
+# PreSTrack Frontend
 
-```markdown
-# PresTrack Frontend
-
-A modern platform for managing pregnancy care, patient interactions, secure payments, and data insights — built with Next.js.
+A modern maternal care platform enabling real-time patient-doctor communication, AI-assisted support, medical record management, and data-driven insights — built with Next.js.
 
 ---
 
 ## 📖 Overview
 
-PresTrack is a powerful health and finance dashboard tailored for pregnancy care clinics, health professionals, and patients. It combines real-time chat support, secure payment handling, role-based access control, and intelligent data analytics — all presented in a beautiful and responsive UI.
+PreSTrack is a comprehensive maternal health management system designed to support **patients**, **doctors**, and **administrators**. It enables:
 
-Whether you're a **health professional**, **clinic administrator**, or an **expecting parent**, PresTrack empowers you to manage everything from a single dashboard.
+* Real-time chat between doctors and patients
+* Secure access to patient medical records
+* AI assistant integration for 24/7 health support
+* Role-based dashboards
+* Automated daily health tips via WhatsApp
+
+This frontend is part of a multi-repo project that connects to a dedicated socket server and backend service.
 
 ---
 
 ## 🔑 Key Features
 
-- 🧑‍⚕️ **Patient Support Portal** – Personalized support and live chat with health professionals or AI assistants.
-- 🩺 **Health Professional Dashboard** – Manage patient interactions, medical records, and appointments.
-- 🏥 **Clinic Management** – Admin tools for overseeing operations, transactions, and user permissions.
-- 💬 **Real-time Chat** – Instant messaging using Socket.io for seamless communication.
-- 🧠 **Data Analytics** – Track patient metrics, financial insights, and performance data.
-- 🔐 **Secure Authentication** – Role-based access using Kinde Auth.
-- 🎨 **Dark/Light Mode** – Customizable UI with theme toggling support.
+* 🧑‍⚕️ **Doctor Dashboard** – Manage patients, view and update medical records, and toggle between AI or human interaction.
+* 🤖 **AI Assistant Toggle** – Patients can interact with AI anytime; doctors can switch between AI and live support.
+* 🩺 **Patient Portal** – Engage with doctors or AI, receive tips, and view health information securely.
+* 💬 **Real-time Chat** – Powered by Socket.io, enabling instant doctor-patient conversations.
+* 🧠 **Medical Records** – Doctors can view/add pregnancy status, blood type, medications, allergies, etc.
+* 📊 **Admin Analytics** – Track room activities, chat logs, and CSV data imports for insights.
+* 🔐 **Secure Role-Based Access** – Supports Admin, Agent (Doctor), and Patient views via Kinde Auth.
+* 🌙 **Theme Toggle** – Switch between dark/light modes.
 
 ---
 
 ## 🌐 Live Preview
 
-🚧 **Coming Soon** – Hosted demo
+🔗 [https://prestrack.genistud.io/](https://prestrack.genistud.io/)
 
 ---
 
 ## ✅ Prerequisites
 
-- [Node.js](https://nodejs.org/) 18.x or later
-- [npm](https://www.npmjs.com/) 9.x or later
-- [PostgreSQL](https://www.postgresql.org/) database
+* [Node.js](https://nodejs.org/) 18.x or later
+* [npm](https://www.npmjs.com/) 9.x or later
 
 ---
 
@@ -46,8 +49,8 @@ Whether you're a **health professional**, **clinic administrator**, or an **expe
 ### 1. Clone the repository
 
 ```bash
-git clone <repository-url>
-cd prestrack-frontend
+git clone https://github.com/Dennis2340/prestrack-enhance-frontend.git
+cd prestrack-enhance-frontend
 ```
 
 ### 2. Install dependencies
@@ -61,142 +64,91 @@ npm install
 Create a `.env` file in the root directory and add:
 
 ```env
-# Database
-DATABASE_URL="postgresql://username:password@localhost:5432/prestrack"
-DIRECT_URL="postgresql://username:password@localhost:5432/prestrack"
-
 # Kinde Auth
-KINDE_CLIENT_ID="your-kinde-client-id"
-KINDE_CLIENT_SECRET="your-kinde-client-secret"
-KINDE_ISSUER_URL="https://your-subdomain.kinde.com"
-KINDE_SITE_URL="http://localhost:3000"
-KINDE_POST_LOGOUT_REDIRECT_URL="http://localhost:3000"
-KINDE_POST_LOGIN_REDIRECT_URL="http://localhost:3000/dashboard"
+KINDE_CLIENT_ID=your-client-id
+KINDE_CLIENT_SECRET=your-secret
+KINDE_ISSUER_URL=https://your-org.kinde.com
+KINDE_SITE_URL=http://localhost:3000
+KINDE_POST_LOGOUT_REDIRECT_URL=http://localhost:3000
+KINDE_POST_LOGIN_REDIRECT_URL=http://localhost:3000/dashboard
 
-# Socket.io (for real-time chat)
-NEXT_PUBLIC_SOCKET_URL="http://localhost:3001"
+# Socket.io
+NEXT_PUBLIC_SOCKET_URL=http://localhost:3001
 
-# Business Configuration
-NEXT_PUBLIC_BUSINESS_ID="your-business-id"
-NEXT_PUBLIC_BUSINESS_NAME="PresTrack"
-NEXT_PUBLIC_CHATBOT_ID="your-chatbot-id"
+# Genistudio WhatsApp / AI
+NEXT_PUBLIC_CHATBOT_ID=your-chatbot-id
+NEXT_PUBLIC_BUSINESS_ID=your-business-id
+NEXT_PUBLIC_BUSINESS_NAME=PreSTrack
 ```
 
-### 4. Set up the database schema
-
-```bash
-npx prisma db push
-```
-
-### 5. Generate Prisma Client
-
-```bash
-npx prisma generate
-```
-
----
-
-## 🔧 Development
-
-Start the development server:
+### 4. Start the Development Server
 
 ```bash
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) to view the application in your browser.
+Then open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ---
 
 ## 📂 Project Structure
 
 ```bash
-prisma/             # Prisma schema and migrations
+prisma/             # Prisma schema (if used)
 src/
-  └── app/          # Next.js App Router structure
-  └── components/   # Reusable UI components
-  └── db/           # Prisma DB client
-  └── lib/          # Utility functions and shared logic
-  └── models/       # Data models for business logic
-config/             # Global app configuration
+├── app/            # Pages and routing (Next.js App Router)
+├── components/     # Shared UI components
+├── db/             # Prisma or DB config
+├── lib/            # Utilities and helpers
+├── models/         # Application models (e.g., rooms, users)
+config/             # App-wide config files
 ```
 
 ---
 
-## 📊 Data Analytics
+## 🧪 Roles & Permissions
 
-PresTrack includes built-in analytics tools to help administrators and health professionals:
-
-- 📈 Track patient health trends and history
-- 💰 Monitor payment status and financial metrics
-- 💬 Analyze real-time chat performance (average response time, resolution rate)
-- 📤 Export reports for auditing and administrative decisions
-
----
-
-## 🔐 Authentication & Roles
-
-| Role     | Access Capabilities                                   |
-|----------|--------------------------------------------------------|
-| Guest    | Browse public pages and view information              |
-| Patient  | Chat, appointments, health profile, and payments      |
-| Agent    | Manage chats, patient records, and schedules          |
-| Admin    | Full access: users, business settings, analytics      |
-
----
-
-## 📜 Available Scripts
-
-| Script            | Description                            |
-|-------------------|----------------------------------------|
-| `npm run dev`     | Start development server               |
-| `npm run build`   | Build for production                   |
-| `npm run start`   | Start production server                |
-| `npm run lint`    | Run ESLint to check code quality       |
+| Role    | Description                                        |
+| ------- | -------------------------------------------------- |
+| Admin   | Manage agents, support rooms, and analytics        |
+| Agent   | Chat with patients, manage records, toggle AI      |
+| Patient | Interact with doctors or AI, receive WhatsApp tips |
 
 ---
 
 ## 🛠️ Technology Stack
 
-| Technology       | Description                                 |
-|------------------|---------------------------------------------|
-| **Next.js 15**     | Full-stack React framework                 |
-| **Tailwind CSS**   | Utility-first styling framework            |
-| **Radix UI**       | Accessible and customizable UI primitives  |
-| **Prisma ORM**     | Type-safe database ORM for PostgreSQL      |
-| **Socket.io**      | Real-time communication engine             |
-| **Kinde Auth**     | Authentication and user management         |
-| **PostgreSQL**     | Scalable relational database               |
-| **React Hooks**    | Modern React state management              |
+| Tech              | Description                       |
+| ----------------- | --------------------------------- |
+| Next.js 15        | Full-stack React framework        |
+| Tailwind CSS      | Utility-first styling             |
+| Shadcn + Radix UI | Accessible, modular UI components |
+| Socket.io         | Real-time messaging               |
+| Kinde Auth        | Authentication & role management  |
+| Genistudio        | WhatsApp integration + AI chatbot |
 
 ---
 
-## 🌐 Solutions We Offer
+## 🩺 Use Case Summary
 
-Welcome to **PresTrack** — your trusted companion for pregnancy health and financial wellness.
-
-- 💬 **Instant Support** – Chat with AI or human agents anytime.
-- 🔐 **Secure Payments** – Manage transactions with confidence.
-- 📆 **24/7 Access** – Access from any device, anytime.
+* 💬 **24/7 Support** – AI chatbot + doctor communication
+* 🩺 **Medical Data** – View/update patient records
+* 📤 **CSV Upload** – For analytics insights (admin only)
+* 📱 **WhatsApp Tips** – Daily health guidance via Genistudio
 
 ---
 
-## 📥 Ready to Get Started?
+## 📜 Available Scripts
 
-Join thousands of satisfied users and transform how your clinic or pregnancy journey is managed.
-
-```bash
-npm run dev
-```
-
-**Start Using PresTrack Today!**
+| Script          | Description             |
+| --------------- | ----------------------- |
+| `npm run dev`   | Run dev server          |
+| `npm run build` | Build production app    |
+| `npm run start` | Start production server |
+| `npm run lint`  | Run ESLint              |
 
 ---
 
 ## 🪪 License
 
-This project is licensed under the MIT License.  
-See the [LICENSE](./LICENSE) file for details.
-```
-
-Let me know if you’d like a downloadable version again once the tool is back online.
+This project is licensed under the MIT License. See the [LICENSE](./LICENSE) file for details.
