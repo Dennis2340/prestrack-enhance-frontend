@@ -19,7 +19,7 @@ export default async function Home() {
 
         <div className="relative">
           <span className="px-4 py-1.5 text-sm font-medium bg-gradient-to-r from-pink-500/10 to-purple-500/10 rounded-full text-pink-800 mb-6 inline-block">
-            Comprehensive Pregnancy Care
+            AI & WhatsApp Healthcare
           </span>
 
           <h1 className="max-w-4xl text-5xl font-bold md:text-6xl lg:text-7xl text-gray-900 bg-gradient-to-r from-pink-600 to-purple-600 bg-clip-text">
@@ -27,14 +27,14 @@ export default async function Home() {
           </h1>
 
           <p className="mt-6 max-w-prose text-gray-600 sm:text-lg">
-            Your trusted companion for pregnancy health and wellness
+            Your trusted platform for AI-driven patient care, WhatsApp communication, and real-time medical insights
           </p>
         </div>
 
         {/* User Selection Cards */}
         <div className="mt-16 w-full">
           <h2 className="text-2xl font-semibold text-gray-800 mb-8">
-            How can we assist you today?
+            How can we support your healthcare needs?
           </h2>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-8">
@@ -51,7 +51,7 @@ export default async function Home() {
                 </h3>
 
                 <p className="text-gray-600 mb-6">
-                  Get personalized pregnancy care and support
+                  Chat with our AI or connect with doctors via WhatsApp for instant health guidance
                 </p>
 
                 <Button asChild className="w-full bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-600 hover:to-purple-600 text-white">
@@ -62,7 +62,7 @@ export default async function Home() {
               </div>
             </div>
 
-            {/* Health Professional Card */}
+            {/* Doctor Card */}
             <div className="group bg-white rounded-xl shadow-sm hover:shadow-md transition-all duration-300 border border-gray-200 overflow-hidden">
               <div className="h-2 bg-gradient-to-r from-purple-400 to-purple-500" />
               <div className="p-6 md:p-8">
@@ -71,11 +71,11 @@ export default async function Home() {
                 </div>
 
                 <h3 className="text-xl font-semibold text-gray-800 mb-3">
-                  Health Professional Dashboard
+                  Doctor Dashboard
                 </h3>
 
                 <p className="text-gray-600 mb-6">
-                  Manage your patient interactions and health records
+                  Toggle AI support, chat via WhatsApp, and view patient records in real-time
                 </p>
 
                 <Button asChild className="w-full bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white">
@@ -95,17 +95,17 @@ export default async function Home() {
                 </div>
 
                 <h3 className="text-xl font-semibold text-gray-800 mb-3">
-                  Clinic Management
+                  Clinic Administration
                 </h3>
 
                 <p className="text-gray-600 mb-6">
-                  Manage your pregnancy clinic operations
+                  Manage AI and WhatsApp interactions for seamless patient care
                 </p>
 
                 <Button asChild className="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white">
-                  <Link href="/api/auth/register">
+                  <RegisterLink>
                     Enter Admin <ArrowRight className="ml-2 w-4 h-4" />
-                  </Link>
+                  </RegisterLink>
                 </Button>
               </div>
             </div>
@@ -119,7 +119,7 @@ export default async function Home() {
         <MaxWidthWrapper className="relative">
           <div className="text-center mb-16">
             <span className="px-4 py-1.5 text-sm font-medium bg-gradient-to-r from-gray-100 to-gray-200 rounded-full text-gray-700 mb-4 inline-block">
-              Our Solutions
+              Our Healthcare Solutions
             </span>
             <h2 className="text-3xl font-bold text-gray-800 md:text-4xl">
               Why Choose{" "}
@@ -129,8 +129,7 @@ export default async function Home() {
               ?
             </h2>
             <p className="mt-4 text-gray-600 max-w-2xl mx-auto">
-              We&apos;re redefining financial management with intelligent solutions
-              built for you
+              Transforming healthcare with AI-driven communication, WhatsApp integration, and real-time insights
             </p>
           </div>
 
@@ -143,11 +142,10 @@ export default async function Home() {
                   <MessageCircle className="h-7 w-7" />
                 </div>
                 <h3 className="text-xl font-semibold text-gray-800 mb-3">
-                  Instant Support
+                  AI & WhatsApp Patient Chat
                 </h3>
                 <p className="text-gray-600">
-                  Chat with our AI or human agents for quick assistance when you
-                  need it most.
+                  Patients can chat with AI or doctors via WhatsApp for instant health advice.
                 </p>
               </div>
             </div>
@@ -157,27 +155,13 @@ export default async function Home() {
               <div className="absolute top-0 right-0 w-24 h-24 bg-green-100/50 rounded-bl-full -z-0"></div>
               <div className="relative z-10">
                 <div className="w-14 h-14 bg-gradient-to-br from-green-500 to-green-600 rounded-lg flex items-center justify-center text-white mb-6 shadow-md">
-                  <svg
-                    className="h-7 w-7"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                  >
-                    <path
-                      d="M19 9L12 16L5 9"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
+                  <Calendar className="h-7 w-7" />
                 </div>
                 <h3 className="text-xl font-semibold text-gray-800 mb-3">
-                  Secure Payments
+                  Real-Time Medical Insights
                 </h3>
                 <p className="text-gray-600">
-                  Manage your money with confidence, advanced security, and
-                  intuitive interfaces.
+                  Doctors access patient records and conversation history for holistic care.
                 </p>
               </div>
             </div>
@@ -190,11 +174,10 @@ export default async function Home() {
                   <Globe className="h-7 w-7" />
                 </div>
                 <h3 className="text-xl font-semibold text-gray-800 mb-3">
-                  24/7 Access
+                  Seamless Doctor-Patient Interaction
                 </h3>
                 <p className="text-gray-600">
-                  Support and services available anytime, anywhere, on any
-                  device.
+                  Real-time communication via WhatsApp and web, anytime, anywhere.
                 </p>
               </div>
             </div>
@@ -210,11 +193,11 @@ export default async function Home() {
 
               <div className="relative">
                 <h2 className="text-3xl font-bold mb-4">
-                  Ready to get started?
+                  Ready to transform patient care?
                 </h2>
                 <p className="text-teal-100 mb-8 max-w-xl mx-auto">
-                  Join thousands of satisfied customers using{" "}
-                  {BUSINESS_CONFIG.name} for their financial needs.
+                  Join thousands of doctors and patients using{" "}
+                  {BUSINESS_CONFIG.name} for AI and WhatsApp-enabled healthcare.
                 </p>
                 <Link href="/chat">
                   <Button className="bg-white text-teal-700 hover:bg-teal-50 px-6 py-3">

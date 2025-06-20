@@ -24,7 +24,7 @@ const AgentLogin = () => {
   return (
     <>
       <AgentNavbar />
-      <div className={` mx-32 bg-${BUSINESS_CONFIG.theme.primaryColor}-50`}>
+      <div className={` mx-4 sm:mx-6 md:mx-8 lg:mx-32  bg-${BUSINESS_CONFIG.theme.primaryColor}-50`}>
         <AgentLoginForm businessId={BUSINESS_CONFIG.businessId} />
       </div>
     </>
