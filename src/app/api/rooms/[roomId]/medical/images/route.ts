@@ -14,7 +14,9 @@ export async function GET(
     const room = await db.room.findUnique({
       where: { 
         id: roomId, 
-        businessId: BUSINESS_CONFIG.businessId 
+        business: {
+          id: BUSINESS_CONFIG.businessId
+        }
       },
       include: {
         guest: {
@@ -23,14 +25,11 @@ export async function GET(
               include: {
                 medicalImages: {
                   include: {
-                    analyses: {
-                      orderBy: { createdAt: 'desc' },
-                      take: 1
-                    },
                     uploader: {
                       select: {
                         id: true,
-                        name: true
+                        name: true,
+                        email: true
                       }
                     }
                   },
@@ -61,17 +60,18 @@ export async function GET(
       url: image.url,
       name: image.fileName,
       fileType: image.fileType,
+      description: image.description,
       uploadedAt: image.createdAt,
       uploader: {
         id: image.uploaderId,
-        name: image.uploader?.name || 'Unknown'
+        name: image.uploader?.name || 'Unknown',
+        email: image.uploader?.email || null
       },
-      analysis: image.analyses[0] ? {
-        id: image.analyses[0].id,
-        result: image.analyses[0].analysisResult,
-        model: image.analyses[0].model,
-        confidence: image.analyses[0].confidence,
-        createdAt: image.analyses[0].createdAt
+      analysis: image.analysisResult ? {
+        result: image.analysisResult,
+        model: image.analysisModel || 'Unknown',
+        confidence: image.confidence,
+        analyzedAt: image.analysisDate
       } : null
     }));
 
