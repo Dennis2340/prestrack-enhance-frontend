@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { X, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { BUSINESS_CONFIG } from "../../config";
+import { MedicalImageUpload } from "./MedicalImageUpload";
 
 interface User {
   id: string;
@@ -379,6 +380,22 @@ const MedicalForm = ({
                 </button>
               </div>
             </div>
+          </div>
+          <div className="mt-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Medical Images
+            </label>
+            <MedicalImageUpload
+              roomId={room.id}
+              onUploadComplete={(results) => {
+                toast.success(`${results.length} image(s) uploaded and analyzed`);
+                // Optionally refresh the medical data
+                onSave();
+              }}
+              onError={(error) => {
+                toast.error(`Upload failed: ${error.message}`);
+              }}
+            />
           </div>
           <div className="p-4 border-t flex justify-end space-x-2 shrink-0">
             <Button variant="outline" onClick={onClose}>

@@ -40,6 +40,8 @@ model User {
 
   // Extensions
   medicalContext         MedicalContext?
+  medicalImages          MedicalImage[]    @relation("PatientMedicalImages")
+  uploadedMedicalImages  MedicalImage[]    @relation("UploadedMedicalImages")
   guestVisitations       Visitation[]      @relation("GuestVisitations")
   agentVisitations       Visitation[]      @relation("AgentVisitations")
   remindersReceived      Reminder[]        @relation("GuestReminders")
@@ -114,14 +116,14 @@ model Notification {
 
 // 🔹 Medical Context Extension
 model MedicalContext {
-  id              String   @id @default(uuid())
-  guestId         String   @unique
-  guest           User     @relation(fields: [guestId], references: [id])
+  id              String        @id @default(uuid())
+  guestId         String        @unique
+  guest           User          @relation(fields: [guestId], references: [id])
 
   pregnancyStatus String?
   gestationalAge  String?
   dueDate         String?
-  highRisk        Boolean  @default(false)
+  highRisk        Boolean       @default(false)
   conditions      Json?
   medications     Json?
   allergies       Json?
@@ -129,10 +131,37 @@ model MedicalContext {
   fhirPatientId   String?
   fhirReferences  Json?
   bloodType       String?
+  medicalImages   MedicalImage[] @relation("MedicalContextImages")
 
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @default(now()) @updatedAt
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 }
+
+model MedicalImage {
+  id               String         @id @default(uuid())
+  guestId          String
+  guest            User           @relation("PatientMedicalImages", fields: [guestId], references: [id])
+  medicalContextId String
+  medicalContext   MedicalContext @relation("MedicalContextImages", fields: [medicalContextId], references: [id])
+  url              String
+  fileName         String
+  fileType         String
+  description      String?
+  uploaderId       String?
+  uploader         User?          @relation("UploadedMedicalImages", fields: [uploaderId], references: [id])
+  
+  // Analysis fields
+  analysisModel    String?     // e.g., "gpt-4o"
+  analysisResult   String?     // The actual analysis text
+  analysisDate     DateTime?   // When the analysis was performed
+  confidence       Float?      // Confidence score if available
+  
+  metadata         Json?
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+}
+
+
 
 // 🔹 Reminder Extension
 model Reminder {
