@@ -230,11 +230,11 @@ export default function DataAnalyticsPage() {
       // Call server API to generate detailed AI insights
       setLoadingMessage("Generating AI insights...");
       try {
-        const sample_rows = rows.slice(0, 20); // send a small sample for more context
+        const sample_rows = rows.slice(0, Math.min(100, rows.length)); // send up to 100 rows for richer context
         const resp = await fetch('/api/analytics/analyze', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ data_summary, column_statistics, correlations, sample_rows, fileName: uploadedFile?.name }),
+          body: JSON.stringify({ data_summary, column_statistics, correlations, sample_rows, fileName: uploadedFile?.name, model: 'gpt-5' }),
         });
         if (resp.ok) {
           const json = await resp.json();
