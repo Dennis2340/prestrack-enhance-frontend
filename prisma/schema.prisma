@@ -17,35 +17,38 @@ model Business {
 }
 
 model User {
-  id                     String            @id @default(uuid())
-  name                   String
-  email                  String?           @unique
-  agentId                String?           @unique
-  role                   Role
-  createdAt              DateTime          @default(now())
-  updatedAt              DateTime          @default(now()) @updatedAt
-  businessId             String
-  business               Business          @relation(fields: [businessId], references: [id])
+  id         String   @id @default(uuid())
+  name       String
+  email      String?  @unique
+  agentId    String?  @unique
+  role       Role
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @default(now()) @updatedAt
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id])
 
   // Socket logic
   agentManagement        AgentManagement?  @relation("AgentManagementAdmin")
   managedAgentManagement AgentManagement[] @relation("AgentManagementAgents")
   AgentPresence          AgentPresence?
 
-  messages               Message[]         @relation("MessageSender")
-  overrideRooms          Room[]            @relation("CurrentOverride")
-  guestRooms             Room[]            @relation("RoomGuest")
-  activeRooms            Room[]            @relation("ActiveAgents")
-  taggedMessages         Message[]         @relation("TaggedAgents")
+  messages       Message[] @relation("MessageSender")
+  overrideRooms  Room[]    @relation("CurrentOverride")
+  guestRooms     Room[]    @relation("RoomGuest")
+  activeRooms    Room[]    @relation("ActiveAgents")
+  taggedMessages Message[] @relation("TaggedAgents")
 
   // Extensions
-  medicalContext         MedicalContext?
-  medicalImages          MedicalImage[]    @relation("PatientMedicalImages")
-  uploadedMedicalImages  MedicalImage[]    @relation("UploadedMedicalImages")
-  guestVisitations       Visitation[]      @relation("GuestVisitations")
-  agentVisitations       Visitation[]      @relation("AgentVisitations")
-  remindersReceived      Reminder[]        @relation("GuestReminders")
-  remindersSent          Reminder[]        @relation("AgentReminders")
+  medicalContext        MedicalContext?
+  medicalImages         MedicalImage[]  @relation("PatientMedicalImages")
+  uploadedMedicalImages MedicalImage[]  @relation("UploadedMedicalImages")
+  guestVisitations      Visitation[]    @relation("GuestVisitations")
+  agentVisitations      Visitation[]    @relation("AgentVisitations")
+  remindersReceived     Reminder[]      @relation("GuestReminders")
+  remindersSent         Reminder[]      @relation("AgentReminders")
+
+  // Data analytics
+  analyses DataAnalysis[]
 }
 
 model Room {
@@ -59,26 +62,26 @@ model Room {
   businessId        String
   business          Business   @relation(fields: [businessId], references: [id])
 
-  guest             User?      @relation("RoomGuest", fields: [guestId], references: [id])
-  currentOverride   User?      @relation("CurrentOverride", fields: [currentOverrideId], references: [id])
-  activeAgents      User[]     @relation("ActiveAgents")
+  guest           User?  @relation("RoomGuest", fields: [guestId], references: [id])
+  currentOverride User?  @relation("CurrentOverride", fields: [currentOverrideId], references: [id])
+  activeAgents    User[] @relation("ActiveAgents")
 
-  messages          Message[]
+  messages           Message[]
   conversationMemory ConversationMemory[]
 }
 
 model Message {
-  id           String     @id @default(uuid())
-  roomId       String
-  senderType   SenderType
-  senderId     String?
-  content      String
-  contentType  String?
-  timestamp    DateTime   @default(now())
+  id          String     @id @default(uuid())
+  roomId      String
+  senderType  SenderType
+  senderId    String?
+  content     String
+  contentType String?
+  timestamp   DateTime   @default(now())
 
-  room         Room       @relation(fields: [roomId], references: [id])
-  sender       User?      @relation("MessageSender", fields: [senderId], references: [id], onDelete: NoAction)
-  taggedAgents User[]     @relation("TaggedAgents")
+  room         Room   @relation(fields: [roomId], references: [id])
+  sender       User?  @relation("MessageSender", fields: [senderId], references: [id], onDelete: NoAction)
+  taggedAgents User[] @relation("TaggedAgents")
 
   fhirMessageId String?
   metadata      Json?
@@ -98,8 +101,8 @@ model AgentManagement {
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
 
-  admin     User     @relation("AgentManagementAdmin", fields: [adminId], references: [id])
-  agents    User[]   @relation("AgentManagementAgents")
+  admin  User   @relation("AgentManagementAdmin", fields: [adminId], references: [id])
+  agents User[] @relation("AgentManagementAgents")
 }
 
 model Notification {
@@ -116,14 +119,14 @@ model Notification {
 
 // 🔹 Medical Context Extension
 model MedicalContext {
-  id              String        @id @default(uuid())
-  guestId         String        @unique
-  guest           User          @relation(fields: [guestId], references: [id])
+  id      String @id @default(uuid())
+  guestId String @unique
+  guest   User   @relation(fields: [guestId], references: [id])
 
   pregnancyStatus String?
   gestationalAge  String?
   dueDate         String?
-  highRisk        Boolean       @default(false)
+  highRisk        Boolean        @default(false)
   conditions      Json?
   medications     Json?
   allergies       Json?
@@ -133,8 +136,8 @@ model MedicalContext {
   bloodType       String?
   medicalImages   MedicalImage[] @relation("MedicalContextImages")
 
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model MedicalImage {
@@ -149,23 +152,21 @@ model MedicalImage {
   description      String?
   uploaderId       String?
   uploader         User?          @relation("UploadedMedicalImages", fields: [uploaderId], references: [id])
-  
+
   // Analysis fields
-  analysisModel    String?     // e.g., "gpt-4o"
-  analysisResult   String?     // The actual analysis text
-  analysisDate     DateTime?   // When the analysis was performed
-  confidence       Float?      // Confidence score if available
-  
-  metadata         Json?
-  createdAt        DateTime    @default(now())
-  updatedAt        DateTime    @updatedAt
+  analysisModel  String? // e.g., "gpt-4o"
+  analysisResult String? // The actual analysis text
+  analysisDate   DateTime? // When the analysis was performed
+  confidence     Float? // Confidence score if available
+
+  metadata  Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
-
-
 
 // 🔹 Reminder Extension
 model Reminder {
-  id            String   @id @default(uuid())
+  id            String         @id @default(uuid())
   guestId       String
   agentId       String
   message       String
@@ -173,27 +174,27 @@ model Reminder {
   sentTime      DateTime?
   status        ReminderStatus @default(pending)
 
-  guest         User     @relation("GuestReminders", fields: [guestId], references: [id])
-  agent         User     @relation("AgentReminders", fields: [agentId], references: [id])
+  guest User @relation("GuestReminders", fields: [guestId], references: [id])
+  agent User @relation("AgentReminders", fields: [agentId], references: [id])
 
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @default(now()) @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
 }
 
 // 🔹 Visitation Extension
 model Visitation {
-  id            String   @id @default(uuid())
+  id            String           @id @default(uuid())
   guestId       String
   agentId       String
   scheduledTime DateTime
   status        VisitationStatus @default(scheduled)
   notes         String?
 
-  guest         User     @relation("GuestVisitations", fields: [guestId], references: [id])
-  agent         User     @relation("AgentVisitations", fields: [agentId], references: [id])
+  guest User @relation("GuestVisitations", fields: [guestId], references: [id])
+  agent User @relation("AgentVisitations", fields: [agentId], references: [id])
 
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @default(now()) @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
 }
 
 // 🔹 AI Memory Extension
@@ -205,9 +206,22 @@ model ConversationMemory {
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
 
-  room      Room     @relation(fields: [roomId], references: [id])
+  room Room @relation(fields: [roomId], references: [id])
 
   @@unique([roomId, key])
+}
+
+// 🔹 Stored Data Analytics
+model DataAnalysis {
+  id           String   @id @default(uuid())
+  adminId      String
+  businessId   String
+  fileName     String?
+  inputSummary Json
+  aiAnalysis   Json
+  createdAt    DateTime @default(now())
+
+  admin User @relation(fields: [adminId], references: [id])
 }
 
 // 🔹 Enums

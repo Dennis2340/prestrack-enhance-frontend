@@ -23,20 +23,18 @@ export async function POST(
     }
 
     // Verify room exists
-    const room = await db.room.findUnique({
-      where: { 
+    const room = await db.room.findFirst({
+      where: {
         id: roomId,
-        business: {
-          id: process.env.NEXT_PUBLIC_BUSINESS_ID
-        }
+        businessId: process.env.NEXT_PUBLIC_BUSINESS_ID,
       },
-      include: { 
+      include: {
         guest: {
           include: {
-            medicalContext: true
-          }
-        } 
-      }
+            medicalContext: true,
+          },
+        },
+      },
     });
 
     if (!room?.guest) {

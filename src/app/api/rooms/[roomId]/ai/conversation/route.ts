@@ -30,12 +30,10 @@ export async function POST(
     }
 
     // Get the room with guest and medical context
-    const room = await db.room.findUnique({
-      where: { 
-        id: roomId, 
-        business: {
-          id: BUSINESS_CONFIG.businessId
-        }
+    const room = await db.room.findFirst({
+      where: {
+        id: roomId,
+        businessId: BUSINESS_CONFIG.businessId,
       },
       include: {
         guest: {
