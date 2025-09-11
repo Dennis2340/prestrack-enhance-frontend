@@ -122,7 +122,8 @@ const AgentDashboard = () => {
     room: Room | null;
     message: string;
     scheduled: string; // ISO format
-  }>({ open: false, room: null, message: "", scheduled: "" });
+    phone?: string; // optional phone
+  }>({ open: false, room: null, message: "", scheduled: "", phone: "" });
   const [visitDialog, setVisitDialog] = useState<{
     open: boolean;
     room: Room | null;
@@ -196,7 +197,7 @@ const AgentDashboard = () => {
       toast.error("No guest found for this room");
       return;
     }
-    setReminderDialog({ open: true, room, message: "", scheduled: "" });
+    setReminderDialog({ open: true, room, message: "", scheduled: "", phone: "" });
   };
 
   const submitReminder = async () => {
@@ -204,7 +205,7 @@ const AgentDashboard = () => {
       toast.error("No guest found for this room");
       return;
     }
-    const { room, message, scheduled } = reminderDialog;
+    const { room, message, scheduled, phone } = reminderDialog;
     if (!message.trim()) {
       toast.error("Please enter a reminder message");
       return;
@@ -223,6 +224,7 @@ const AgentDashboard = () => {
             guestId: room.guest.id,
             message,
             scheduledTime: new Date(scheduled).toISOString(),
+            phone: phone || undefined,
           }),
         }
       );
@@ -515,11 +517,11 @@ const AgentDashboard = () => {
         <div className="space-y-8 py-8">
           {/* Dialogs */}
           <Dialog open={reminderDialog.open} onOpenChange={(open) => setReminderDialog((d) => ({ ...d, open }))}>
-            <DialogContent>
+            <DialogContent className="sm:max-w-md bg-white rounded-2xl border border-slate-200 shadow-2xl">
               <DialogHeader>
-                <DialogTitle>Create Reminder</DialogTitle>
+                <DialogTitle className="text-lg font-semibold text-slate-800">Create Reminder</DialogTitle>
               </DialogHeader>
-              <div className="space-y-4">
+              <div className="space-y-4 py-1">
                 <div>
                   <label className="block text-sm text-slate-600 mb-1">Message</label>
                   <Input
@@ -529,26 +531,37 @@ const AgentDashboard = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm text-slate-600 mb-1">Scheduled (ISO)</label>
+                  <label className="block text-sm text-slate-600 mb-1">Scheduled</label>
                   <Input
-                    placeholder="2025-08-18T10:00:00Z"
+                    type="datetime-local"
                     value={reminderDialog.scheduled}
+                    min={new Date().toISOString().slice(0,16)}
                     onChange={(e) => setReminderDialog((d) => ({ ...d, scheduled: e.target.value }))}
                   />
+                  <p className="text-xs text-slate-500 mt-1">Choose date & time. We convert it to UTC automatically.</p>
+                </div>
+                <div>
+                  <label className="block text-sm text-slate-600 mb-1">Patient Phone (optional)</label>
+                  <Input
+                    placeholder="+2327xxxxxxx or local number"
+                    value={reminderDialog.phone || ""}
+                    onChange={(e) => setReminderDialog((d) => ({ ...d, phone: e.target.value }))}
+                  />
+                  <p className="text-xs text-slate-500 mt-1">If the patient signed up with email and no phone, add one here to send via WhatsApp.</p>
                 </div>
               </div>
               <DialogFooter>
                 <Button variant="ghost" onClick={() => setReminderDialog((d) => ({ ...d, open: false }))}>Cancel</Button>
-                <Button onClick={submitReminder}>Create</Button>
+                <Button className={`bg-gradient-to-r from-${primaryColor} to-blue-600 text-white`} onClick={submitReminder}>Create</Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
           <Dialog open={whatsappDialog.open} onOpenChange={(open) => setWhatsappDialog((d) => ({ ...d, open }))}>
-            <DialogContent>
+            <DialogContent className="sm:max-w-md bg-white rounded-2xl border border-slate-200 shadow-2xl">
               <DialogHeader>
-                <DialogTitle>Send WhatsApp Message</DialogTitle>
+                <DialogTitle className="text-lg font-semibold text-slate-800">Send WhatsApp Message</DialogTitle>
               </DialogHeader>
-              <div className="space-y-4">
+              <div className="space-y-4 py-1">
                 <div>
                   <label className="block text-sm text-slate-600 mb-1">Message</label>
                   <Input
@@ -560,49 +573,10 @@ const AgentDashboard = () => {
               </div>
               <DialogFooter>
                 <Button variant="ghost" onClick={() => setWhatsappDialog((d) => ({ ...d, open: false }))}>Cancel</Button>
-                <Button onClick={submitWhatsApp}>Send</Button>
+                <Button className={`bg-gradient-to-r from-${primaryColor} to-blue-600 text-white`} onClick={submitWhatsApp}>Send</Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
-
-          <Dialog open={visitDialog.open} onOpenChange={(open) => setVisitDialog((d) => ({ ...d, open }))}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Schedule Visit</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm text-slate-600 mb-1">Date & Time (ISO)</label>
-                  <Input
-                    placeholder="2025-08-18T10:00:00Z"
-                    value={visitDialog.scheduled}
-                    onChange={(e) => setVisitDialog((d) => ({ ...d, scheduled: e.target.value }))}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm text-slate-600 mb-1">Notes (optional)</label>
-                  <Input
-                    placeholder="Any additional notes"
-                    value={visitDialog.notes || ""}
-                    onChange={(e) => setVisitDialog((d) => ({ ...d, notes: e.target.value }))}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm text-slate-600 mb-1">Patient Phone (optional)</label>
-                  <Input
-                    placeholder="+2327xxxxxxx or local number"
-                    value={visitDialog.phone || ""}
-                    onChange={(e) => setVisitDialog((d) => ({ ...d, phone: e.target.value }))}
-                  />
-                </div>
-              </div>
-              <DialogFooter>
-                <Button variant="ghost" onClick={() => setVisitDialog((d) => ({ ...d, open: false }))}>Cancel</Button>
-                <Button onClick={submitVisit}>Schedule</Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-          {/* Header with glowing effect */}
           <div className="relative">
             <div className="absolute -top-20 left-1/2 transform -translate-x-1/2 w-64 h-64 bg-blue-400 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob"></div>
             <div className="absolute -top-20 -right-4 w-64 h-64 bg-teal-300 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-2000"></div>
@@ -1129,26 +1103,29 @@ const AgentDashboard = () => {
 
                     <CardFooter className="pt-2 pb-4 relative z-10">
                       <div className="w-full flex flex-col gap-2">
-                        <div className="flex gap-2">
+                        <div className="flex flex-wrap gap-2">
                           <Button
-                            variant="outline"
                             size="sm"
+                            aria-label="Send WhatsApp"
+                            className={`bg-gradient-to-r from-${primaryColor} to-blue-600 hover:from-${hoverColor} hover:to-blue-700 text-white shadow-sm`}
                             onClick={() => handleSendWhatsApp(room)}
                           >
                             <MessageCircle className="h-4 w-4 mr-2" />
                             Send WhatsApp
                           </Button>
                           <Button
-                            variant="outline"
                             size="sm"
+                            aria-label="Set Reminder"
+                            className={`bg-gradient-to-r from-${primaryColor} to-blue-600 hover:from-${hoverColor} hover:to-blue-700 text-white shadow-sm`}
                             onClick={() => handleSetReminder(room)}
                           >
                             <Bell className="h-4 w-4 mr-2" />
                             Set Reminder
                           </Button>
                           <Button
-                            variant="outline"
                             size="sm"
+                            aria-label="Create Visit"
+                            className={`bg-gradient-to-r from-${primaryColor} to-blue-600 hover:from-${hoverColor} hover:to-blue-700 text-white shadow-sm`}
                             onClick={() => handleCreateVisit(room)}
                           >
                             <Calendar className="h-4 w-4 mr-2" />

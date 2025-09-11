@@ -71,7 +71,7 @@ export async function POST(request: Request) {
     }
 
     const data = await request.json();
-    const { guestId, message, scheduledTime } = data;
+    const { guestId, message, scheduledTime, phoneE164, phone } = data;
 
     let reminder = await db.reminder.create({
       data: {
@@ -89,7 +89,8 @@ export async function POST(request: Request) {
       select: { email: true, name: true }
     });
 
-    const toE164 = formatE164(derivePhoneFromEmail(guest?.email));
+    const derived = derivePhoneFromEmail(guest?.email);
+    const toE164 = formatE164(phoneE164 || phone || derived);
 
     if (!toE164) {
       // Can't send WhatsApp without a phone. Return created reminder with pending status.
