@@ -4,10 +4,10 @@ import { getKindeServerSession } from "@kinde-oss/kinde-auth-nextjs/server";
 import { ReminderStatus } from "@prisma/client"; // Import ReminderStatus type
 import { derivePhoneFromEmail, formatE164, sendWhatsAppViaGateway } from "@/lib/whatsapp";
 
-export async function GET(request: Request) {
+export async function GET(request: Request, ctx: { params: { roomId: string } }) {
   try {
     const { searchParams } = new URL(request.url);
-    const roomId = searchParams.get("roomId");
+    const roomId = searchParams.get("roomId") || ctx?.params?.roomId || undefined;
     const businessId = searchParams.get("businessId");
     const status = searchParams.get("status");
 
@@ -53,10 +53,10 @@ export async function GET(request: Request) {
   }
 }
 
-export async function POST(request: Request) {
+export async function POST(request: Request, ctx: { params: { roomId: string } }) {
   try {
     const { searchParams } = new URL(request.url);
-    const roomId = searchParams.get("roomId");
+    let roomId = searchParams.get("roomId") || ctx?.params?.roomId || undefined;
     const businessId = searchParams.get("businessId");
 
     if (!roomId || !businessId) {
@@ -71,7 +71,10 @@ export async function POST(request: Request) {
     }
 
     const data = await request.json();
-    const { guestId, message, scheduledTime, phoneE164, phone } = data;
+    const { guestId, message, scheduledTime, phoneE164, phone, roomId: roomIdFromBody } = data || {};
+    if (!roomId && roomIdFromBody && typeof roomIdFromBody === "string") {
+      roomId = roomIdFromBody;
+    }
 
     let reminder = await db.reminder.create({
       data: {
