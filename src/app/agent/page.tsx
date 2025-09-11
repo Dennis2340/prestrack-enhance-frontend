@@ -130,6 +130,11 @@ const AgentDashboard = () => {
     notes?: string;
     phone?: string; // optional phone; will be formatted server-side
   }>({ open: false, room: null, scheduled: "", notes: "", phone: "" });
+  const [whatsappDialog, setWhatsappDialog] = useState<{
+    open: boolean;
+    room: Room | null;
+    message: string;
+  }>({ open: false, room: null, message: "" });
 
   const router = useRouter();
   const socketRef = useRef<Socket | null>(null);
@@ -155,11 +160,17 @@ const AgentDashboard = () => {
 
   // Quick actions: Send WhatsApp and Set Reminder using dialogs instead of prompts
   const handleSendWhatsApp = async (room: Room) => {
+    setWhatsappDialog({ open: true, room, message: "" });
+  };
+
+  const submitWhatsApp = async () => {
+    const { room, message } = whatsappDialog;
+    if (!room) return;
+    if (!message.trim()) {
+      toast.error("Please enter a message");
+      return;
+    }
     try {
-      // Open a quick dialog could be added later; for now keep a very simple inline input via prompt replacement is out-of-scope.
-      // Using a minimal inline flow via toast if needed
-      const message = prompt("Enter WhatsApp message to send to patient:") || "";
-      if (!message.trim()) return;
       const res = await fetch(
         `/api/rooms/${room.id}/whatsapp/send?businessId=${BUSINESS_CONFIG.businessId}`,
         {
@@ -173,6 +184,7 @@ const AgentDashboard = () => {
         throw new Error(err?.error || `Send failed (${res.status})`);
       }
       toast.success("WhatsApp message sent");
+      setWhatsappDialog((d) => ({ ...d, open: false }));
       fetchRooms();
     } catch (e: any) {
       toast.error(`Failed to send WhatsApp: ${e?.message || e}`);
@@ -528,6 +540,27 @@ const AgentDashboard = () => {
               <DialogFooter>
                 <Button variant="ghost" onClick={() => setReminderDialog((d) => ({ ...d, open: false }))}>Cancel</Button>
                 <Button onClick={submitReminder}>Create</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+          <Dialog open={whatsappDialog.open} onOpenChange={(open) => setWhatsappDialog((d) => ({ ...d, open }))}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Send WhatsApp Message</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm text-slate-600 mb-1">Message</label>
+                  <Input
+                    placeholder="Type your message"
+                    value={whatsappDialog.message}
+                    onChange={(e) => setWhatsappDialog((d) => ({ ...d, message: e.target.value }))}
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="ghost" onClick={() => setWhatsappDialog((d) => ({ ...d, open: false }))}>Cancel</Button>
+                <Button onClick={submitWhatsApp}>Send</Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
