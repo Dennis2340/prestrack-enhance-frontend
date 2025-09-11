@@ -17,6 +17,12 @@ export const config = {
     businessName: process.env.NEXT_PUBLIC_BUSINESS_NAME || "Safulpay",
     chatbotId: process.env.NEXT_PUBLIC_CHATBOT_ID || "",
   },
+  whatsapp: {
+    whapi: {
+      baseUrl: process.env.WHAPI_BASE_URL || "https://gate.whapi.cloud",
+      token: process.env.WHAPI_TOKEN || process.env.BEARER_TOKEN || "",
+    },
+  },
 };
 
 export const BUSINESS_CONFIG = {

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { getKindeServerSession } from "@kinde-oss/kinde-auth-nextjs/server";
 import { VisitationStatus } from "@prisma/client";
+import { derivePhoneFromEmail, formatE164, sendWhatsAppViaGateway } from "@/lib/whatsapp";
 
 export async function GET(request: Request) {
   try {
@@ -69,7 +70,7 @@ export async function POST(request: Request) {
     }
 
     const data = await request.json();
-    const { guestId, scheduledTime, notes } = data;
+    const { guestId, scheduledTime, notes, phoneE164, phone } = data;
 
     const visit = await db.visitation.create({
       data: {
@@ -81,7 +82,43 @@ export async function POST(request: Request) {
       }
     });
 
-    return NextResponse.json({ visit }, { status: 201 });
+    // Attempt to notify guest via WhatsApp about the appointment
+    try {
+      // Load guest to potentially derive phone from email convention
+      const guest = await db.user.findUnique({
+        where: { id: guestId },
+        select: { email: true, name: true },
+      });
+
+      const derived = derivePhoneFromEmail(guest?.email);
+      const toE164 = formatE164(phoneE164 || phone || derived);
+
+      if (!toE164) {
+        return NextResponse.json(
+          {
+            visit,
+            warning: "Appointment created; no WhatsApp number available for notification.",
+          },
+          { status: 201 }
+        );
+      }
+
+      const when = new Date(scheduledTime).toLocaleString();
+      const doctorName = user.given_name || user.family_name
+        ? `${user.given_name || ""} ${user.family_name || ""}`.trim()
+        : (user.email || "Doctor");
+      const message = `Appointment Scheduled\n\nHello${guest?.name ? ` ${guest.name}` : ""}, you have an appointment with ${doctorName}.\nDate & Time: ${when}${notes ? `\nNotes: ${notes}` : ""}`;
+
+      await sendWhatsAppViaGateway({ toE164, body: message });
+
+      return NextResponse.json({ visit, notified: true }, { status: 201 });
+    } catch (notifyErr: any) {
+      console.warn("Visit created but WhatsApp notify failed:", notifyErr?.message || notifyErr);
+      return NextResponse.json(
+        { visit, error: "WhatsApp notification failed" },
+        { status: 207 }
+      );
+    }
   } catch (error) {
     console.error("Error creating visit:", error);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });

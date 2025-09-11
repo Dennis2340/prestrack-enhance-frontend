@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { getKindeServerSession } from "@kinde-oss/kinde-auth-nextjs/server";
 import { ReminderStatus } from "@prisma/client"; // Import ReminderStatus type
+import { derivePhoneFromEmail, formatE164, sendWhatsAppViaGateway } from "@/lib/whatsapp";
 
 export async function GET(request: Request) {
   try {
@@ -72,7 +73,7 @@ export async function POST(request: Request) {
     const data = await request.json();
     const { guestId, message, scheduledTime } = data;
 
-    const reminder = await db.reminder.create({
+    let reminder = await db.reminder.create({
       data: {
         guestId,
         agentId: user.id,
@@ -81,6 +82,46 @@ export async function POST(request: Request) {
         status: "pending"
       }
     });
+
+    // Fetch guest details to derive phone number
+    const guest = await db.user.findUnique({
+      where: { id: guestId },
+      select: { email: true, name: true }
+    });
+
+    const toE164 = formatE164(derivePhoneFromEmail(guest?.email));
+
+    if (!toE164) {
+      // Can't send WhatsApp without a phone. Return created reminder with pending status.
+      return NextResponse.json({
+        reminder,
+        warning: "No phone could be derived for guest; WhatsApp not sent.",
+      }, { status: 201 });
+    }
+
+    // Format WhatsApp message
+    const humanTime = new Date(scheduledTime).toLocaleString();
+    const doctorName = user.given_name || user.family_name ? `${user.given_name || ""} ${user.family_name || ""}`.trim() : (user.email || "Doctor");
+    const body = `Hello${guest?.name ? ` ${guest.name}` : ""}, this is a reminder from ${doctorName}:\n\n${message}\n\nScheduled time: ${humanTime}`;
+
+    try {
+      await sendWhatsAppViaGateway({ toE164, body });
+      // mark reminder as sent
+      reminder = await db.reminder.update({
+        where: { id: reminder.id },
+        data: { status: "sent", sentTime: new Date(), updatedAt: new Date() },
+      });
+    } catch (e) {
+      console.error("Failed to send WhatsApp for reminder:", e);
+      reminder = await db.reminder.update({
+        where: { id: reminder.id },
+        data: { status: "failed", updatedAt: new Date() },
+      });
+      return NextResponse.json({
+        reminder,
+        error: "WhatsApp send failed",
+      }, { status: 207 }); // 207 Multi-Status indicating partial success
+    }
 
     return NextResponse.json({ reminder }, { status: 201 });
   } catch (error) {

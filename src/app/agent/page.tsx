@@ -6,6 +6,13 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
   Card,
   CardContent,
   CardHeader,
@@ -109,6 +116,20 @@ const AgentDashboard = () => {
   });
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
   const [isMedicalFormOpen, setIsMedicalFormOpen] = useState(false);
+  // Dialog state for reminder & visit creation (replaces window.prompt)
+  const [reminderDialog, setReminderDialog] = useState<{
+    open: boolean;
+    room: Room | null;
+    message: string;
+    scheduled: string; // ISO format
+  }>({ open: false, room: null, message: "", scheduled: "" });
+  const [visitDialog, setVisitDialog] = useState<{
+    open: boolean;
+    room: Room | null;
+    scheduled: string; // ISO format
+    notes?: string;
+    phone?: string; // optional phone; will be formatted server-side
+  }>({ open: false, room: null, scheduled: "", notes: "", phone: "" });
 
   const router = useRouter();
   const socketRef = useRef<Socket | null>(null);
@@ -117,7 +138,7 @@ const AgentDashboard = () => {
     setIsLoadingRooms(true);
     try {
       const res = await fetch(
-        `/api/rooms/?businessId=${BUSINESS_CONFIG.businessId}&includeMedical=true&includeVisits=true&includeReminders=true`
+        `/api/rooms/?businessId=${BUSINESS_CONFIG.businessId}&includeMedical=true&includeVisits=true&includeReminders=true&onlineGuestsOnly=true`
       );
       if (!res.ok) {
         throw new Error(`Failed to fetch rooms: ${res.status}`);
@@ -129,6 +150,172 @@ const AgentDashboard = () => {
       console.error("Error fetching rooms:", error);
     } finally {
       setIsLoadingRooms(false);
+    }
+  };
+
+  // Quick actions: Send WhatsApp and Set Reminder using dialogs instead of prompts
+  const handleSendWhatsApp = async (room: Room) => {
+    try {
+      // Open a quick dialog could be added later; for now keep a very simple inline input via prompt replacement is out-of-scope.
+      // Using a minimal inline flow via toast if needed
+      const message = prompt("Enter WhatsApp message to send to patient:") || "";
+      if (!message.trim()) return;
+      const res = await fetch(
+        `/api/rooms/${room.id}/whatsapp/send?businessId=${BUSINESS_CONFIG.businessId}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message }),
+        }
+      );
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error || `Send failed (${res.status})`);
+      }
+      toast.success("WhatsApp message sent");
+      fetchRooms();
+    } catch (e: any) {
+      toast.error(`Failed to send WhatsApp: ${e?.message || e}`);
+    }
+  };
+
+  const handleSetReminder = async (room: Room) => {
+    if (!room.guest?.id) {
+      toast.error("No guest found for this room");
+      return;
+    }
+    setReminderDialog({ open: true, room, message: "", scheduled: "" });
+  };
+
+  const submitReminder = async () => {
+    if (!reminderDialog.room?.guest?.id) {
+      toast.error("No guest found for this room");
+      return;
+    }
+    const { room, message, scheduled } = reminderDialog;
+    if (!message.trim()) {
+      toast.error("Please enter a reminder message");
+      return;
+    }
+    if (!scheduled || isNaN(new Date(scheduled).getTime())) {
+      toast.error("Invalid date/time format");
+      return;
+    }
+    try {
+      const res = await fetch(
+        `/api/rooms/${room.id}/reminders?businessId=${BUSINESS_CONFIG.businessId}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            guestId: room.guest.id,
+            message,
+            scheduledTime: new Date(scheduled).toISOString(),
+          }),
+        }
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok && res.status !== 201 && res.status !== 207) {
+        throw new Error(data?.error || `Create failed (${res.status})`);
+      }
+      if (res.status === 207) {
+        toast.message("Reminder created; WhatsApp send failed", {
+          description: data?.error || "",
+        });
+      } else {
+        toast.success("Reminder created and WhatsApp sent (if phone available)");
+      }
+      setReminderDialog((d) => ({ ...d, open: false }));
+      fetchRooms();
+    } catch (e: any) {
+      toast.error(`Failed to create reminder: ${e?.message || e}`);
+    }
+  };
+
+  const handleCreateVisit = async (room: Room) => {
+    if (!room.guest?.id) {
+      toast.error("No guest found for this room");
+      return;
+    }
+    setVisitDialog({ open: true, room, scheduled: "", notes: "", phone: "" });
+  };
+
+  const submitVisit = async () => {
+    const { room, scheduled, notes, phone } = visitDialog;
+    if (!room?.guest?.id) {
+      toast.error("No guest found for this room");
+      return;
+    }
+    if (!scheduled || isNaN(new Date(scheduled).getTime())) {
+      toast.error("Invalid date/time format");
+      return;
+    }
+    try {
+      const res = await fetch(
+        `/api/rooms/${room.id}/visits?roomId=${room.id}&businessId=${BUSINESS_CONFIG.businessId}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            guestId: room.guest.id,
+            scheduledTime: new Date(scheduled).toISOString(),
+            notes: notes || undefined,
+            phone: phone || undefined,
+          }),
+        }
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok && res.status !== 201 && res.status !== 207) {
+        throw new Error(data?.error || `Create failed (${res.status})`);
+      }
+      if (res.status === 207) {
+        toast.message("Visit created; WhatsApp notification failed", {
+          description: data?.error || "",
+        });
+      } else if (data?.warning) {
+        toast.message("Visit created; no WhatsApp number available", {
+          description: data?.warning,
+        });
+      } else {
+        toast.success("Visit scheduled and WhatsApp notified (if number available)");
+      }
+      setVisitDialog((d) => ({ ...d, open: false }));
+      fetchRooms();
+    } catch (e: any) {
+      toast.error(`Failed to create visit: ${e?.message || e}`);
+    }
+  };
+
+  const handleUpdateVisitStatus = async (
+    room: Room,
+    visitId: string,
+    status: "completed" | "cancelled"
+  ) => {
+    try {
+      const notes =
+        window.prompt(
+          status === "completed"
+            ? "Optional notes for completion:"
+            : "Optional notes for cancellation:"
+        ) || undefined;
+      const res = await fetch(
+        `/api/rooms/${room.id}/visits?visitId=${visitId}&businessId=${BUSINESS_CONFIG.businessId}`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status, notes }),
+        }
+      );
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error || `Update failed (${res.status})`);
+      }
+      toast.success(
+        status === "completed" ? "Visit marked completed" : "Visit cancelled"
+      );
+      fetchRooms();
+    } catch (e: any) {
+      toast.error(`Failed to update visit: ${e?.message || e}`);
     }
   };
 
@@ -314,6 +501,74 @@ const AgentDashboard = () => {
       <AgentNavbar />
       <MaxWidthWrapper className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="space-y-8 py-8">
+          {/* Dialogs */}
+          <Dialog open={reminderDialog.open} onOpenChange={(open) => setReminderDialog((d) => ({ ...d, open }))}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Create Reminder</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm text-slate-600 mb-1">Message</label>
+                  <Input
+                    placeholder="Reminder message"
+                    value={reminderDialog.message}
+                    onChange={(e) => setReminderDialog((d) => ({ ...d, message: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-slate-600 mb-1">Scheduled (ISO)</label>
+                  <Input
+                    placeholder="2025-08-18T10:00:00Z"
+                    value={reminderDialog.scheduled}
+                    onChange={(e) => setReminderDialog((d) => ({ ...d, scheduled: e.target.value }))}
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="ghost" onClick={() => setReminderDialog((d) => ({ ...d, open: false }))}>Cancel</Button>
+                <Button onClick={submitReminder}>Create</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={visitDialog.open} onOpenChange={(open) => setVisitDialog((d) => ({ ...d, open }))}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Schedule Visit</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm text-slate-600 mb-1">Date & Time (ISO)</label>
+                  <Input
+                    placeholder="2025-08-18T10:00:00Z"
+                    value={visitDialog.scheduled}
+                    onChange={(e) => setVisitDialog((d) => ({ ...d, scheduled: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-slate-600 mb-1">Notes (optional)</label>
+                  <Input
+                    placeholder="Any additional notes"
+                    value={visitDialog.notes || ""}
+                    onChange={(e) => setVisitDialog((d) => ({ ...d, notes: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-slate-600 mb-1">Patient Phone (optional)</label>
+                  <Input
+                    placeholder="+2327xxxxxxx or local number"
+                    value={visitDialog.phone || ""}
+                    onChange={(e) => setVisitDialog((d) => ({ ...d, phone: e.target.value }))}
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="ghost" onClick={() => setVisitDialog((d) => ({ ...d, open: false }))}>Cancel</Button>
+                <Button onClick={submitVisit}>Schedule</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
           {/* Header with glowing effect */}
           <div className="relative">
             <div className="absolute -top-20 left-1/2 transform -translate-x-1/2 w-64 h-64 bg-blue-400 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob"></div>
@@ -729,36 +984,72 @@ const AgentDashboard = () => {
                           </div>
                           <div className="ml-3">
                             <h3 className="text-sm font-medium text-slate-700">
-                              Upcoming Visits
+                              Visits
                             </h3>
-                            {room.visits?.length === 0 ? (
-                              <p className="text-sm text-slate-500">
-                                No upcoming visits
-                              </p>
+                            {!room.visits || room.visits.length === 0 ? (
+                              <p className="text-sm text-slate-500">No visits</p>
                             ) : (
-                              <div className="mt-1">
-                                {room.visits
-                                  ?.filter(
-                                    (visit) => visit.status === "scheduled"
-                                  )
-                                  .map((visit, index) => (
-                                    <div
-                                      key={visit.id}
-                                      className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-${primaryColor}/10 text-${primaryColor} ${
-                                        index <
-                                        (room.visits?.filter(
-                                          (v) => v.status === "scheduled"
-                                        ).length || 0) -
-                                          1
-                                          ? "mr-2"
-                                          : ""
-                                      }`}
-                                    >
-                                      {new Date(
-                                        visit.scheduledTime
-                                      ).toLocaleDateString()}
+                              <div className="mt-2 space-y-2">
+                                {room.visits.map((visit) => (
+                                  <div
+                                    key={visit.id}
+                                    className={`border border-${primaryColor}/20 rounded-md p-2 bg-white`}
+                                  >
+                                    <div className="flex items-center justify-between">
+                                      <div>
+                                        <p className="text-sm text-slate-800 font-medium">
+                                          {new Date(visit.scheduledTime).toLocaleString()}
+                                        </p>
+                                        {visit.notes && (
+                                          <p className="text-xs text-slate-500 mt-0.5">
+                                            Notes: {visit.notes}
+                                          </p>
+                                        )}
+                                      </div>
+                                      <span
+                                        className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                                          visit.status === "scheduled"
+                                            ? `bg-${primaryColor}/10 text-${primaryColor}`
+                                            : visit.status === "completed"
+                                            ? "bg-green-100 text-green-700"
+                                            : "bg-red-100 text-red-700"
+                                        }`}
+                                      >
+                                        {visit.status}
+                                      </span>
                                     </div>
-                                  ))}
+                                    {visit.status === "scheduled" && (
+                                      <div className="mt-2 flex gap-2">
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={() =>
+                                            handleUpdateVisitStatus(
+                                              room,
+                                              visit.id,
+                                              "completed"
+                                            )
+                                          }
+                                        >
+                                          Complete
+                                        </Button>
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={() =>
+                                            handleUpdateVisitStatus(
+                                              room,
+                                              visit.id,
+                                              "cancelled"
+                                            )
+                                          }
+                                        >
+                                          Cancel
+                                        </Button>
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
                               </div>
                             )}
                           </div>
@@ -777,24 +1068,23 @@ const AgentDashboard = () => {
                             <h3 className="text-sm font-medium text-slate-700">
                               Reminders
                             </h3>
-                            {room.reminders?.length === 0 ? (
-                              <p className="text-sm text-slate-500">
-                                No reminders
-                              </p>
+                            {!room.reminders || room.reminders.length === 0 ? (
+                              <p className="text-sm text-slate-500">No reminders</p>
                             ) : (
-                              <div className="mt-1">
-                                {room.reminders?.map((reminder, index) => (
+                              <div className="mt-2 space-y-2">
+                                {room.reminders.map((reminder) => (
                                   <div
                                     key={reminder.id}
-                                    className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-${primaryColor}/10 text-${primaryColor} ${
-                                      index < (room.reminders?.length || 0) - 1
-                                        ? "mr-2"
-                                        : ""
-                                    }`}
+                                    className={`border border-${primaryColor}/20 rounded-md p-2 bg-white`}
                                   >
-                                    {new Date(
-                                      reminder.scheduledTime
-                                    ).toLocaleTimeString()}
+                                    <p className="text-sm text-slate-800 font-medium">
+                                      {new Date(reminder.scheduledTime).toLocaleString()}
+                                    </p>
+                                    {reminder.message && (
+                                      <p className="text-xs text-slate-600 mt-0.5">
+                                        {reminder.message}
+                                      </p>
+                                    )}
                                   </div>
                                 ))}
                               </div>
@@ -805,29 +1095,58 @@ const AgentDashboard = () => {
                     </CardContent>
 
                     <CardFooter className="pt-2 pb-4 relative z-10">
-                      <Button
-                        onClick={() => handleJoinRoom(room.id)}
-                        className={`w-full bg-gradient-to-r from-${primaryColor} to-blue-600 hover:from-${hoverColor} hover:to-blue-700 text-white shadow-sm transition-all duration-200 group-hover:shadow-md`}
-                        disabled={!currentAgent || !socketRef.current?.connected}
-                      >
-                        {!currentAgent || !socketRef.current?.connected ? (
-                          <>
-                            <AlertCircle className="h-4 w-4 mr-2" />
-                            Not Connected
-                          </>
-                        ) : (
-                          <>
+                      <div className="w-full flex flex-col gap-2">
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleSendWhatsApp(room)}
+                          >
                             <MessageCircle className="h-4 w-4 mr-2" />
-                            Join Conversation
-                            {room.messages.length > 0 && (
-                              <span className="ml-1 text-xs text-slate-200">
-                                ({room.messages.length} Messages)
-                              </span>
-                            )}
-                          </>
-                        )}
-                      </Button>
+                            Send WhatsApp
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleSetReminder(room)}
+                          >
+                            <Bell className="h-4 w-4 mr-2" />
+                            Set Reminder
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleCreateVisit(room)}
+                          >
+                            <Calendar className="h-4 w-4 mr-2" />
+                            Create Visit
+                          </Button>
+                        </div>
+                        <Button
+                          onClick={() => handleJoinRoom(room.id)}
+                          className={`w-full bg-gradient-to-r from-${primaryColor} to-blue-600 hover:from-${hoverColor} hover:to-blue-700 text-white shadow-sm transition-all duration-200 group-hover:shadow-md`}
+                          disabled={!currentAgent || !socketRef.current?.connected}
+                        >
+                          {!currentAgent || !socketRef.current?.connected ? (
+                            <>
+                              <AlertCircle className="h-4 w-4 mr-2" />
+                              Not Connected
+                            </>
+                          ) : (
+                            <>
+                              <MessageCircle className="h-4 w-4 mr-2" />
+                              Join Conversation
+                              {room.messages.length > 0 && (
+                                <span className="ml-1 text-xs text-slate-200">
+                                  ({room.messages.length} Messages)
+                                </span>
+                              )}
+                            </>
+                          )}
+                        </Button>
+                      </div>
                     </CardFooter>
+
                   </Card>
                 ))}
               </div>
