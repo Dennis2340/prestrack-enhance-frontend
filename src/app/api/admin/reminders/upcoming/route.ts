@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
     const take = Math.min(200, Math.max(1, Number(url.searchParams.get('take') || 50)))
     const now = new Date()
     const items = await prisma.task.findMany({
-      where: { type: 'medication_reminder' as any, scheduledTime: { gte: now }, status: { in: ['pending','sent'] as any } },
+      where: { type: { in: ['medication_reminder','reminder'] as any }, scheduledTime: { gte: now }, status: { in: ['pending','sent'] as any } },
       orderBy: { scheduledTime: 'asc' },
       take,
       select: {

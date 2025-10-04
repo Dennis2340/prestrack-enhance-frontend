@@ -78,13 +78,6 @@ export async function agentRespond(opts: {
   try { console.log(`[agent] scope=%s`, patientScopedPhone ? 'patient' : 'general') } catch {}
   const { results } = await ragSearch({ query: msg, topK, sessionKey: getRagSessionKey() || undefined, patientPhoneE164: patientScopedPhone });
 
-  // Strict grounding: if nothing relevant was found, do not proceed to the LLM.
-  if (!results || results.length === 0) {
-    const fallback = "I don't have that information in my available context. I can only help with health‑related questions about your care. Please ask a health‑related question.";
-    const answer = opts.whatsappStyle ? formatWhatsApp(fallback) : fallback;
-    return { answer, matches: [], billable: false };
-  }
-
   // Compose with OpenAI when configured
   let answer = "";
   let billable = false;
@@ -100,15 +93,14 @@ export async function agentRespond(opts: {
       const sys = `You are Prestrack, a helpful clinical assistant answering over WhatsApp. Keep replies concise, readable, and actionable:
 - Limit to ~6 short lines.
 - Prefer short sentences and simple bullets.
-- Include only the most relevant facts from context.
-- If unsure, say you don't know.
+- Prefer using the provided Context when available; summarize only the most relevant facts from Context.
+- If Context is missing or thin, provide general, evidence-based health guidance within common clinical practice. Keep it high-level and safe.
 - Avoid long URLs unless essential.
 
-STRICT GROUNDING AND DOMAIN RULES (MANDATORY):
-- Use ONLY the provided Context below. Do NOT add any information that is not explicitly present in Context.
-- If the user asks about anything outside health/clinical matters, reply: "I only support health-related questions about your care. Please ask a health-related question."
-- If the Context does not contain the needed information, clearly say: "Not in my available context." and ask the user to clarify a health-related question.
-- Never speculate or fabricate details. Keep answers narrowly scoped to the Context.`;
+DOMAIN AND SAFETY (MANDATORY):
+- Only answer health/clinical questions. If the topic is unrelated to health, ask the user to provide a health-related question.
+- Do not fabricate specific patient details or records. Avoid diagnosis; suggest when to seek medical care if appropriate.
+- If unsure, say you don't know.`;
       const context = results.slice(0, Math.max(1, Math.min(8, topK))).map((r, i) => `# Source ${i + 1}: ${r.title}${r.sourceUrl ? `\nURL: ${r.sourceUrl}` : ''}\n${r.text}`).join("\n\n");
       const prompt = `User question:\n${msg}\n\nContext:\n${context}\n\nWrite a WhatsApp-friendly answer now:`;
       const completion = await client.chat.completions.create({

@@ -20,7 +20,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
     const now = new Date()
     const items = await prisma.task.findMany({
-      where: { subjectType: 'patient' as any, patientId: id, type: 'reminder' as any, scheduledTime: { gte: now } },
+      where: { subjectType: 'patient' as any, patientId: id, type: 'medication_reminder' as any, scheduledTime: { gte: now } },
       orderBy: { scheduledTime: 'asc' },
       take: 50,
       select: { id: true, scheduledTime: true, status: true, notes: true }
@@ -44,7 +44,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (!date || times.length === 0) return NextResponse.json({ error: 'date and times are required' }, { status: 400 })
 
     const data = times.map((t) => ({
-      type: 'reminder' as any,
+      type: 'medication_reminder' as any,
       status: 'pending' as any,
       scheduledTime: toUtcDate(date, t),
       subjectType: 'patient' as any,
