@@ -80,7 +80,7 @@ export async function agentRespond(opts: {
   if (hasOpenAI) {
     try {
       const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-      const sys = `You are a helpful clinical assistant. Use the provided context snippets to answer. If unsure, say you don't know.`;
+      const sys = `You are Prestrack, a helpful clinical assistant. Use the provided context snippets to answer. If unsure, say you don't know.`;
       const context = results.slice(0, Math.max(1, Math.min(8, topK))).map((r, i) => `# Source ${i + 1}: ${r.title}${r.sourceUrl ? `\nURL: ${r.sourceUrl}` : ''}\n${r.text}`).join("\n\n");
       const prompt = `Question: ${msg}\n\nContext:\n${context}\n\nAnswer:`;
       const completion = await client.chat.completions.create({

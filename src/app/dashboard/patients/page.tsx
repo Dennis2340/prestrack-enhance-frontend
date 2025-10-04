@@ -250,7 +250,17 @@ export default function PatientsPage() {
               <div>{p.phoneE164 || "-"}</div>
               <div className="text-xs text-gray-500">{new Date(p.createdAt).toLocaleString()}</div>
               <div className="text-xs">
-                <a className="text-blue-600 hover:underline" href={`/dashboard/patients/${p.id}`}>View</a>
+                <a className="text-blue-600 hover:underline mr-3" href={`/dashboard/patients/${p.id}`}>View</a>
+                <button
+                  className="text-teal-700 hover:underline"
+                  onClick={async ()=>{
+                    try {
+                      const res = await fetch(`/api/admin/patients/${p.id}/notify-access`, { method:'POST' })
+                      const d = await res.json(); if (!res.ok) throw new Error(d?.error || 'Failed')
+                      alert('Patient notified on WhatsApp')
+                    } catch(e:any) { alert(e?.message || 'Failed') }
+                  }}
+                >Notify access</button>
               </div>
             </div>
           ))

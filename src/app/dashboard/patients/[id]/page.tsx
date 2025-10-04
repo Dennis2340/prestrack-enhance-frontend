@@ -47,6 +47,14 @@ export default function PatientDetailPage() {
   const [vitalUnits, setVitalUnits] = useState("");
   const [vitalNotify, setVitalNotify] = useState(false);
   const [vitals, setVitals] = useState<Array<any>>([]);
+  // Prescriptions
+  const [rxList, setRxList] = useState<Array<any>>([])
+  const [rxName, setRxName] = useState("")
+  const [rxStrength, setRxStrength] = useState("")
+  const [rxForm, setRxForm] = useState("")
+  const [rxStart, setRxStart] = useState("")
+  const [rxEnd, setRxEnd] = useState("")
+  const [rxTimes, setRxTimes] = useState<string>("09:00\n21:00")
 
   const lsKey = useMemo(() => `patient_sources_${detail?.phoneE164 || "unknown"}`.replace(/[^a-zA-Z0-9_]/g, "_"), [detail?.phoneE164]);
 
@@ -86,6 +94,13 @@ export default function PatientDetailPage() {
       if (raw) setSources(JSON.parse(raw));
     } catch {}
   }, [lsKey]);
+
+  // Load prescriptions when tab is prescriptions
+  useEffect(() => {
+    if (tab === 'prescriptions' && detail?.patient?.id) {
+      fetch(`/api/admin/patients/${detail.patient.id}/prescriptions`).then(r=>r.json()).then(d=> setRxList(d.items || [])).catch(()=>{})
+    }
+  }, [tab, detail?.patient?.id])
 
   const saveSources = useCallback((next: Source[]) => {
     setSources(next);
@@ -228,6 +243,7 @@ export default function PatientDetailPage() {
           <Tabs.Trigger value="medical" className="px-3 py-2 text-sm border-b-2 data-[state=active]:border-blue-600">Medical History</Tabs.Trigger>
           <Tabs.Trigger value="allergies" className="px-3 py-2 text-sm border-b-2 data-[state=active]:border-blue-600">Allergies</Tabs.Trigger>
           <Tabs.Trigger value="vitals" className="px-3 py-2 text-sm border-b-2 data-[state=active]:border-blue-600">Vitals</Tabs.Trigger>
+          <Tabs.Trigger value="prescriptions" className="px-3 py-2 text-sm border-b-2 data-[state=active]:border-blue-600">Prescriptions</Tabs.Trigger>
         </Tabs.List>
 
         <Tabs.Content value="overview" className="mt-3">
@@ -275,6 +291,61 @@ export default function PatientDetailPage() {
                     </div>
                   ))
                 )}
+              </div>
+            </div>
+          </div>
+        </Tabs.Content>
+
+        <Tabs.Content value="prescriptions" className="mt-3">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="md:col-span-2 border rounded">
+              <div className="px-3 py-2 border-b text-sm font-medium">Prescriptions</div>
+              <div className="divide-y">
+                {rxList.length === 0 ? (
+                  <div className="p-3 text-sm text-gray-500">No prescriptions.</div>
+                ) : (
+                  rxList.map((rx:any)=>(
+                    <div key={rx.id} className="p-3 text-sm">
+                      <div className="font-medium">{rx.medicationName} {rx.strength ? `(${rx.strength})` : ''} {rx.form || ''}</div>
+                      <div className="text-xs text-gray-500">Start: {new Date(rx.startDate).toLocaleDateString()} {rx.endDate ? `• End: ${new Date(rx.endDate).toLocaleDateString()}` : ''}</div>
+                      <div className="mt-2">
+                        <button className="px-2 py-1 text-xs border rounded" onClick={async ()=>{
+                          const times = rxTimes.split(/\n+/).map(s=>s.trim()).filter(Boolean)
+                          const res = await fetch(`/api/admin/prescriptions/${rx.id}/reminders`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ days: 7, times }) })
+                          const d = await res.json(); if (!res.ok) alert(d?.error || 'Failed'); else alert(`Created ${d.created} reminders`)
+                        }}>Create 7‑day reminders</button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+            <div className="border rounded p-3">
+              <div className="text-sm font-medium mb-2">Add Prescription</div>
+              <div className="space-y-2">
+                <input value={rxName} onChange={e=> setRxName(e.target.value)} className="border rounded px-3 py-2 w-full" placeholder="Medication name" />
+                <div className="grid grid-cols-2 gap-2">
+                  <input value={rxStrength} onChange={e=> setRxStrength(e.target.value)} className="border rounded px-3 py-2 w-full" placeholder="Strength (e.g., 500mg)" />
+                  <input value={rxForm} onChange={e=> setRxForm(e.target.value)} className="border rounded px-3 py-2 w-full" placeholder="Form (e.g., tablet)" />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <input type="date" value={rxStart} onChange={e=> setRxStart(e.target.value)} className="border rounded px-3 py-2 w-full" />
+                  <input type="date" value={rxEnd} onChange={e=> setRxEnd(e.target.value)} className="border rounded px-3 py-2 w-full" />
+                </div>
+                <label className="block text-xs font-medium">Reminder times (HH:MM per line)</label>
+                <textarea value={rxTimes} onChange={e=> setRxTimes(e.target.value)} className="border rounded w-full h-20 px-3 py-2 font-mono text-xs" />
+                <div className="flex items-center justify-end">
+                  <button className="bg-blue-600 text-white px-3 py-2 rounded" onClick={async ()=>{
+                    if (!detail?.patient?.id) return
+                    if (!rxName.trim()) { alert('Medication name required'); return }
+                    const res = await fetch(`/api/admin/patients/${detail.patient.id}/prescriptions`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ medicationName: rxName, strength: rxStrength || undefined, form: rxForm || undefined, startDate: rxStart || undefined, endDate: rxEnd || undefined }) })
+                    const d = await res.json(); if (!res.ok) { alert(d?.error || 'Failed'); return }
+                    // refresh list
+                    const list = await fetch(`/api/admin/patients/${detail.patient.id}/prescriptions`).then(r=>r.json()).catch(()=>({items:[]}))
+                    setRxList(list.items || [])
+                    setRxName(''); setRxStrength(''); setRxForm(''); setRxStart(''); setRxEnd('')
+                  }}>Save</button>
+                </div>
               </div>
             </div>
           </div>
