@@ -3,7 +3,7 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import * as Tabs from "@radix-ui/react-tabs";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { uploadFiles } from "@/lib/uploadthing";
+// Defer heavy client helpers to runtime to reduce compile-time memory pressure
 import { useParams } from "next/navigation";
 
 type Detail = {
@@ -103,6 +103,7 @@ export default function PatientDetailPage() {
     try {
       setProcessing(true);
       if (files.length > 0) {
+        const { uploadFiles } = await import("@/lib/uploadthing");
         const res = await uploadFiles("documents", { files });
         selectedUrls.push(...res.map((r: any) => r.url).filter(Boolean));
       }

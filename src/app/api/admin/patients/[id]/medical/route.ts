@@ -2,11 +2,23 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { sendWhatsAppViaGateway } from '@/lib/whatsapp'
 
-async function notifyProviders(patientId: string, msg: string) {
+async function notifyProviders(patientId: string, bodyText: string) {
+  // Resolve patient display info
+  const patient = await prisma.patient.findUnique({ where: { id: patientId }, select: { firstName: true, lastName: true } })
+  const phone = await prisma.contactChannel.findFirst({
+    where: { ownerType: 'patient', patientId, type: 'whatsapp' },
+    orderBy: { preferred: 'desc' },
+    select: { value: true },
+  })
+  const name = [patient?.firstName, patient?.lastName].filter(Boolean).join(' ') || 'Unnamed'
+  const phoneE164 = phone?.value || 'unknown'
+
+  const message = `Medical update\nPatient: ${name}\nPhone: ${phoneE164}\n${bodyText}`
+
   // Notify all providers who have phoneE164 configured
   const providers = await prisma.providerProfile.findMany({ where: { phoneE164: { not: null } } })
   await Promise.allSettled(
-    providers.map((p) => p.phoneE164 ? sendWhatsAppViaGateway({ toE164: p.phoneE164, body: msg }) : Promise.resolve())
+    providers.map((p) => p.phoneE164 ? sendWhatsAppViaGateway({ toE164: p.phoneE164, body: message }) : Promise.resolve())
   )
 }
 
@@ -45,7 +57,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     })
 
     if (notify) {
-      await notifyProviders(id, `Patient ${id} medical history updated.`)
+      await notifyProviders(id, `Medical history updated.`)
     }
 
     return NextResponse.json({ ok: true, id: upserted.id })

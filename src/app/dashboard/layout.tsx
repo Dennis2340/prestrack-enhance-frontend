@@ -18,6 +18,7 @@ const nav = [
   { href: "/dashboard/admin", label: "Admin", icon: Shield },
   // Admin utilities
   { href: "/dashboard/admin/providers", label: "Care Providers", icon: Users },
+  { href: "/dashboard/admin/provider-agent", label: "Provider Agent", icon: Shield },
   { href: "/dashboard/admin/rag", label: "RAG Ingestion", icon: Shield },
 ];
 
