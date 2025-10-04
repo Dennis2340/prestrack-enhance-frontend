@@ -114,13 +114,19 @@ export default function ProvidersDashboardPage() {
                     onChange={async (e)=>{
                       const v = e.target.value
                       // Map select to flags and send a single update call (twice is ok if backend expects individual keys)
-                      const payload: any = { userId: (p as any).userId }
+                      const payload: any = { userId: p.id }
                       if (v === 'none') { payload.canUpdateEscalations = false; payload.canCloseEscalations = false }
                       if (v === 'update') { payload.canUpdateEscalations = true; payload.canCloseEscalations = false }
                       if (v === 'close') { payload.canUpdateEscalations = true; payload.canCloseEscalations = true }
                       try {
-                        await fetch('/api/admin/providers/update-privileges', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) })
-                      } catch {}
+                        const res = await fetch('/api/admin/providers/update-privileges', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) })
+                        if (!res.ok) {
+                          const d = await res.json().catch(()=>({}))
+                          alert(d?.error || `Failed (${res.status})`)
+                        }
+                      } catch (e:any) {
+                        alert(e?.message || 'Failed')
+                      }
                     }}
                   >
                     <option value="none">No access</option>
