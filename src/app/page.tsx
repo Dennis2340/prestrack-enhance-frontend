@@ -1,10 +1,8 @@
 import MaxWidthWrapper from "@/components/MaxWidthWrapper";
 import Link from "next/link";
-import { RegisterLink } from "@kinde-oss/kinde-auth-nextjs/server";
 import Navbar from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Heart, Baby, Calendar, User, MessageCircle, Globe } from "lucide-react";
-import { BUSINESS_CONFIG } from "../../config";
 
 export default async function Home() {
   return (
@@ -23,7 +21,7 @@ export default async function Home() {
           </span>
 
           <h1 className="max-w-4xl text-5xl font-bold md:text-6xl lg:text-7xl text-gray-900 bg-gradient-to-r from-pink-600 to-purple-600 bg-clip-text">
-            Welcome to {BUSINESS_CONFIG.name}
+            Welcome to PresTrack
           </h1>
 
           <p className="mt-6 max-w-prose text-gray-600 sm:text-lg">
@@ -50,15 +48,9 @@ export default async function Home() {
                   Patient Support
                 </h3>
 
-                <p className="text-gray-600 mb-6">
-                  Chat with our AI or connect with doctors via WhatsApp for instant health guidance
+                <p className="text-gray-600 mb-0">
+                  Patients chat via WhatsApp only. This web app is for clinic staff.
                 </p>
-
-                <Button asChild className="w-full bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-600 hover:to-purple-600 text-white">
-                  <Link href="/chat">
-                    Start Chatting <ArrowRight className="ml-2 w-4 h-4" />
-                  </Link>
-                </Button>
               </div>
             </div>
 
@@ -78,11 +70,7 @@ export default async function Home() {
                   Toggle AI support, chat via WhatsApp, and view patient records in real-time
                 </p>
 
-                <Button asChild className="w-full bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white">
-                  <Link href="/agent">
-                    Access Dashboard <ArrowRight className="ml-2 w-4 h-4" />
-                  </Link>
-                </Button>
+                {/* Staff access via Login page only */}
               </div>
             </div>
 
@@ -103,9 +91,9 @@ export default async function Home() {
                 </p>
 
                 <Button asChild className="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white">
-                  <RegisterLink>
-                    Enter Admin <ArrowRight className="ml-2 w-4 h-4" />
-                  </RegisterLink>
+                  <Link href="/login">
+                    Login <ArrowRight className="ml-2 w-4 h-4" />
+                  </Link>
                 </Button>
               </div>
             </div>
@@ -124,7 +112,7 @@ export default async function Home() {
             <h2 className="text-3xl font-bold text-gray-800 md:text-4xl">
               Why Choose{" "}
               <span className="bg-gradient-to-r from-teal-600 to-green-600 bg-clip-text text-transparent">
-                {BUSINESS_CONFIG.name}
+                PresTrack
               </span>
               ?
             </h2>
@@ -197,11 +185,11 @@ export default async function Home() {
                 </h2>
                 <p className="text-teal-100 mb-8 max-w-xl mx-auto">
                   Join thousands of doctors and patients using{" "}
-                  {BUSINESS_CONFIG.name} for AI and WhatsApp-enabled healthcare.
+                  PresTrack for AI and WhatsApp-enabled healthcare.
                 </p>
-                <Link href="/chat">
+                <Link href="/login">
                   <Button className="bg-white text-teal-700 hover:bg-teal-50 px-6 py-3">
-                    Start Using {BUSINESS_CONFIG.name} Today
+                    Staff Sign In
                     <ArrowRight className="ml-2 h-5 w-5" />
                   </Button>
                 </Link>

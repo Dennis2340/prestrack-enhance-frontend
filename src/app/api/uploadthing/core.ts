@@ -1,30 +1,19 @@
 import { createUploadthing, type FileRouter } from "uploadthing/next";
-import { UploadThingError } from "uploadthing/server";
 
 const f = createUploadthing();
 
-// FileRouter for your app, can contain multiple FileRoutes
+// Define your UploadThing file router
 export const ourFileRouter = {
-  // Company document uploader
-  medicalImage: f({
-    image: {
-      maxFileSize: "8MB",
-      maxFileCount: 10,
-    },
-  })
-    
-    .onUploadComplete(async ({ metadata, file }) => {
-      console.log("Upload complete for user:");
-      console.log("File URL:", file.ufsUrl);
-      
-      return { 
-        uploadedBy: '',
-        fileUrl: file.ufsUrl,
-        fileKey: file.key,
-        fileName: file.name,
-        fileSize: file.size,
-        fileType: file.type
-      };
+  // Example: avatar image upload
+  avatar: f({ image: { maxFileSize: "4MB", maxFileCount: 1 } })
+    .onUploadComplete(async ({ file }) => {
+      // Optionally, persist references in DB here
+      return { uploaded: true, url: file.url };
+    }),
+  // Example: documents (pdf)
+  documents: f({ pdf: { maxFileSize: "16MB", maxFileCount: 5 } })
+    .onUploadComplete(async ({ file }) => {
+      return { uploaded: true, url: file.url };
     }),
 } satisfies FileRouter;
 

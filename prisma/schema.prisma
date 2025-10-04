@@ -7,256 +7,336 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Business {
-  id        String   @id @default(uuid())
-  name      String   @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @default(now()) @updatedAt
-  rooms     Room[]
-  users     User[]
-}
+// New WhatsApp- and FHIR-centric schema
 
-model User {
-  id         String   @id @default(uuid())
-  name       String
-  email      String?  @unique
-  agentId    String?  @unique
-  role       Role
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @default(now()) @updatedAt
-  businessId String
-  business   Business @relation(fields: [businessId], references: [id])
-
-  // Socket logic
-  agentManagement        AgentManagement?  @relation("AgentManagementAdmin")
-  managedAgentManagement AgentManagement[] @relation("AgentManagementAgents")
-  AgentPresence          AgentPresence?
-
-  messages       Message[] @relation("MessageSender")
-  overrideRooms  Room[]    @relation("CurrentOverride")
-  guestRooms     Room[]    @relation("RoomGuest")
-  activeRooms    Room[]    @relation("ActiveAgents")
-  taggedMessages Message[] @relation("TaggedAgents")
-
-  // Extensions
-  medicalContext        MedicalContext?
-  medicalImages         MedicalImage[]  @relation("PatientMedicalImages")
-  uploadedMedicalImages MedicalImage[]  @relation("UploadedMedicalImages")
-  guestVisitations      Visitation[]    @relation("GuestVisitations")
-  agentVisitations      Visitation[]    @relation("AgentVisitations")
-  remindersReceived     Reminder[]      @relation("GuestReminders")
-  remindersSent         Reminder[]      @relation("AgentReminders")
-
-  // Data analytics
-  analyses DataAnalysis[]
-}
-
-model Room {
-  id                String     @id @default(uuid())
-  name              String?
-  guestId           String?    @unique
-  currentOverrideId String?
-  status            RoomStatus @default(active)
-  createdAt         DateTime   @default(now())
-  updatedAt         DateTime   @default(now()) @updatedAt
-  businessId        String
-  business          Business   @relation(fields: [businessId], references: [id])
-
-  guest           User?  @relation("RoomGuest", fields: [guestId], references: [id])
-  currentOverride User?  @relation("CurrentOverride", fields: [currentOverrideId], references: [id])
-  activeAgents    User[] @relation("ActiveAgents")
-
-  messages           Message[]
-  conversationMemory ConversationMemory[]
-}
-
-model Message {
-  id          String     @id @default(uuid())
-  roomId      String
-  senderType  SenderType
-  senderId    String?
-  content     String
-  contentType String?
-  timestamp   DateTime   @default(now())
-
-  room         Room   @relation(fields: [roomId], references: [id])
-  sender       User?  @relation("MessageSender", fields: [senderId], references: [id], onDelete: NoAction)
-  taggedAgents User[] @relation("TaggedAgents")
-
-  fhirMessageId String?
-  metadata      Json?
-}
-
-model AgentPresence {
-  id       String   @id @default(uuid())
-  agentId  String   @unique
-  isOnline Boolean  @default(false)
-  lastSeen DateTime @updatedAt
-  agent    User     @relation(fields: [agentId], references: [agentId])
-}
-
-model AgentManagement {
-  id        String   @id @default(uuid())
-  adminId   String   @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @default(now()) @updatedAt
-
-  admin  User   @relation("AgentManagementAdmin", fields: [adminId], references: [id])
-  agents User[] @relation("AgentManagementAgents")
-}
-
-model Notification {
-  id          String               @id @default(uuid())
-  title       String
-  description String
-  time        DateTime
-  read        String[]
-  roomId      String?
-  priority    NotificationPriority
-  createdAt   DateTime             @default(now())
-  updatedAt   DateTime             @updatedAt
-}
-
-// 🔹 Medical Context Extension
-model MedicalContext {
-  id      String @id @default(uuid())
-  guestId String @unique
-  guest   User   @relation(fields: [guestId], references: [id])
-
-  pregnancyStatus String?
-  gestationalAge  String?
-  dueDate         String?
-  highRisk        Boolean        @default(false)
-  conditions      Json?
-  medications     Json?
-  allergies       Json?
-  vitalSigns      Json?
-  fhirPatientId   String?
-  fhirReferences  Json?
-  bloodType       String?
-  medicalImages   MedicalImage[] @relation("MedicalContextImages")
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model MedicalImage {
-  id               String         @id @default(uuid())
-  guestId          String
-  guest            User           @relation("PatientMedicalImages", fields: [guestId], references: [id])
-  medicalContextId String
-  medicalContext   MedicalContext @relation("MedicalContextImages", fields: [medicalContextId], references: [id])
-  url              String
-  fileName         String
-  fileType         String
-  description      String?
-  uploaderId       String?
-  uploader         User?          @relation("UploadedMedicalImages", fields: [uploaderId], references: [id])
-
-  // Analysis fields
-  analysisModel  String? // e.g., "gpt-4o"
-  analysisResult String? // The actual analysis text
-  analysisDate   DateTime? // When the analysis was performed
-  confidence     Float? // Confidence score if available
-
-  metadata  Json?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-// 🔹 Reminder Extension
-model Reminder {
-  id            String         @id @default(uuid())
-  guestId       String
-  agentId       String
-  message       String
-  scheduledTime DateTime
-  sentTime      DateTime?
-  status        ReminderStatus @default(pending)
-
-  guest User @relation("GuestReminders", fields: [guestId], references: [id])
-  agent User @relation("AgentReminders", fields: [agentId], references: [id])
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @default(now()) @updatedAt
-}
-
-// 🔹 Visitation Extension
-model Visitation {
-  id            String           @id @default(uuid())
-  guestId       String
-  agentId       String
-  scheduledTime DateTime
-  status        VisitationStatus @default(scheduled)
-  notes         String?
-
-  guest User @relation("GuestVisitations", fields: [guestId], references: [id])
-  agent User @relation("AgentVisitations", fields: [agentId], references: [id])
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @default(now()) @updatedAt
-}
-
-// 🔹 AI Memory Extension
-model ConversationMemory {
-  id        String   @id @default(uuid())
-  roomId    String
-  key       String
-  value     String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @default(now()) @updatedAt
-
-  room Room @relation(fields: [roomId], references: [id])
-
-  @@unique([roomId, key])
-}
-
-// 🔹 Stored Data Analytics
-model DataAnalysis {
-  id           String   @id @default(uuid())
-  adminId      String
-  businessId   String
-  fileName     String?
-  inputSummary Json
-  aiAnalysis   Json
-  createdAt    DateTime @default(now())
-
-  admin User @relation(fields: [adminId], references: [id])
-}
-
-// 🔹 Enums
+// Enums
 enum Role {
-  guest
-  agent
   admin
+  provider
 }
 
-enum SenderType {
-  ai
-  agent
-  guest
-  system
+enum SubjectType {
+  patient
+  visitor
 }
 
-enum RoomStatus {
-  active
+enum Channel {
+  whatsapp
+}
+
+enum Direction {
+  inbound
+  outbound
+}
+
+enum ConversationStatus {
+  open
   closed
+  escalated
 }
 
-enum NotificationPriority {
-  HIGH
-  LOW
-  MID
+enum TaskType {
+  medication_reminder
+  reminder
+  visit
+  escalation
 }
 
-enum VisitationStatus {
-  scheduled
-  completed
-  cancelled
-}
-
-enum ReminderStatus {
+enum TaskStatus {
   pending
   sent
+  done
+  canceled
   failed
+}
+
+enum AdherenceEvent {
+  taken
+  missed
+  skipped
+  side_effect
+}
+
+// FHIR-aligned enums
+enum DocumentStatus {
+  current
+  superseded
+  entered_in_error
+}
+
+enum MedicationRequestStatus {
+  active
+  completed
+  stopped
+  entered_in_error
+}
+
+enum MedicationRequestIntent {
+  order
+  plan
+}
+
+// Core Users
+model User {
+  id        String   @id @default(uuid())
+  name      String
+  email     String?  @unique
+  passwordHash String?
+  role      Role
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  providerProfile ProviderProfile?
+  // Backrefs
+  uploadedDocuments Document[]
+  performedAdherences Adherence[]
+}
+
+model ProviderProfile {
+  id                            String  @id @default(uuid())
+  userId                        String  @unique
+  phoneE164                     String?
+  notifyMedication              Boolean @default(true)
+  notifyEscalation              Boolean @default(true)
+  notificationCooldownMinutes   Int     @default(10)
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+// Patients and Visitors
+model Patient {
+  id          String   @id @default(uuid())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  firstName   String?
+  lastName    String?
+  dateOfBirth DateTime?
+  sex         String?  // FHIR: administrativeGender
+  externalId  String?  @unique
+  identifiers Json?    // FHIR Identifier[] (system,value,use)
+  address     Json?    // FHIR Address structure
+
+  contacts      ContactChannel[]
+  conversations Conversation[]
+  prescriptions Prescription[]
+  adherence     Adherence[]
+  escalations   Escalation[]
+  fhirLinks     FhirLink[]
+  documents     Document[]
+  tasks         Task[]
+}
+
+model Visitor {
+  id          String   @id @default(uuid())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  displayName String?
+
+  contacts      ContactChannel[]
+  conversations Conversation[]
+  tasks         Task[]
+  fhirLinks     FhirLink[]
+}
+
+model ContactChannel {
+  id        String      @id @default(uuid())
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  ownerType SubjectType
+  patientId String?
+  visitorId String?
+
+  type      String      // whatsapp | email | phone
+  value     String      // E.164 for WhatsApp/phone
+  verified  Boolean     @default(false)
+  preferred Boolean     @default(false)
+
+  patient   Patient?    @relation(fields: [patientId], references: [id])
+  visitor   Visitor?    @relation(fields: [visitorId], references: [id])
+
+  @@index([type, value])
+}
+
+model Conversation {
+  id            String            @id @default(uuid())
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  subjectType   SubjectType
+  patientId     String?
+  visitorId     String?
+  channel       Channel           @default(whatsapp)
+  status        ConversationStatus @default(open)
+  lastMessageAt DateTime?
+
+  patient       Patient?          @relation(fields: [patientId], references: [id])
+  visitor       Visitor?          @relation(fields: [visitorId], references: [id])
+
+  messages      CommMessage[]
+
+  @@index([subjectType, patientId])
+  @@index([subjectType, visitorId])
+}
+
+model CommMessage {
+  id             String       @id @default(uuid())
+  conversationId String
+  createdAt      DateTime     @default(now())
+
+  direction      Direction
+  via            Channel      @default(whatsapp)
+  body           String
+  mediaUrl       String?
+  meta           Json?
+
+  // Sender tags
+  senderType     String?      // system | provider | patient | visitor
+  senderId       String?
+
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+
+  @@index([conversationId, createdAt])
+}
+
+model Prescription {
+  id             String          @id @default(uuid())
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  patientId      String
+  medicationName String
+  strength       String?
+  form           String?
+  startDate      DateTime
+  endDate        DateTime?
+  timezone       String          @default("UTC")
+  // FHIR MedicationRequest additions
+  status         MedicationRequestStatus @default(active)
+  intent         MedicationRequestIntent @default(order)
+  medicationCode String?     // code value from system
+  medicationSystem String?   // code system e.g., RxNorm/SNOMED
+
+  patient        Patient         @relation(fields: [patientId], references: [id])
+  schedules      DosageSchedule[]
+  tasks          Task[]
+  adherence      Adherence[]
+}
+
+model DosageSchedule {
+  id              String         @id @default(uuid())
+  prescriptionId  String
+  frequency       String?        // once_daily | twice_daily | interval_hours | custom
+  times           Json?          // e.g., ["08:00","20:00"]
+  intervalHours   Int?
+
+  prescription    Prescription   @relation(fields: [prescriptionId], references: [id])
+}
+
+model Task {
+  id             String      @id @default(uuid())
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  type           TaskType
+  status         TaskStatus  @default(pending)
+  scheduledTime  DateTime
+  notes          String?
+  metadata       Json?
+
+  subjectType    SubjectType
+  patientId      String?
+  visitorId      String?
+
+  // Optional link for medication reminders
+  prescriptionId String?
+
+  patient        Patient?      @relation(fields: [patientId], references: [id])
+  visitor        Visitor?      @relation(fields: [visitorId], references: [id])
+  prescription   Prescription? @relation(fields: [prescriptionId], references: [id])
+  adherences     Adherence[]
+
+  @@index([type, status, scheduledTime])
+}
+
+model Adherence {
+  id             String        @id @default(uuid())
+  createdAt      DateTime      @default(now())
+
+  patientId      String
+  prescriptionId String
+  taskId         String?
+  event          AdherenceEvent
+  details        String?
+  effectiveAt    DateTime?
+  note           String?
+  performerUserId String?
+
+  patient        Patient       @relation(fields: [patientId], references: [id])
+  prescription   Prescription  @relation(fields: [prescriptionId], references: [id])
+  task           Task?         @relation(fields: [taskId], references: [id])
+  performerUser  User?         @relation(fields: [performerUserId], references: [id])
+}
+
+model Escalation {
+  id          String   @id @default(uuid())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  patientId   String
+  reason      String
+  summary     String?
+  meta        Json?
+
+  patient     Patient  @relation(fields: [patientId], references: [id])
+}
+
+// Patient documents (images, PDFs, reports), maps to FHIR DocumentReference
+model Document {
+  id               String    @id @default(uuid())
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  patientId        String
+  uploadedByUserId String?
+
+  title            String?
+  description      String?
+  url              String     // storage URL
+  filename         String
+  contentType      String     // MIME type
+  size             Int?
+  hash             String?
+  metadata         Json?
+  // FHIR DocumentReference alignment
+  status           DocumentStatus @default(current)
+  typeCode         String?        // code for document type
+  typeSystem       String?        // coding system for type
+  categoryCode     String?
+  categorySystem   String?
+  authoredAt       DateTime?
+  context          Json?
+
+  patient          Patient   @relation(fields: [patientId], references: [id])
+  uploadedBy       User?     @relation(fields: [uploadedByUserId], references: [id])
+
+  @@index([patientId, createdAt])
+}
+
+// Minimal FHIR linkage table
+model FhirLink {
+  id           String    @id @default(uuid())
+  createdAt    DateTime  @default(now())
+
+  resourceType String
+  resourceId   String
+  patientId    String?
+  visitorId    String?
+
+  patient      Patient?  @relation(fields: [patientId], references: [id])
+  visitor      Visitor?  @relation(fields: [visitorId], references: [id])
+
+  @@index([resourceType, resourceId])
 }

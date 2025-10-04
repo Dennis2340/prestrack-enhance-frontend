@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "postinstall": "npx prisma generate"
+    "postinstall": "npx prisma generate",
+    "seed": "prisma db seed"
   },
   "dependencies": {
     "@kinde-oss/kinde-auth-nextjs": "^2.5.2",
@@ -44,7 +45,9 @@
     "tailwind-merge": "^3.0.2",
     "tailwindcss-animate": "^1.0.7",
     "uploadthing": "^7.7.3",
-    "uuid": "^11.1.0"
+    "uuid": "^11.1.0",
+    "bcryptjs": "^2.4.3",
+    "jsonwebtoken": "^9.0.2"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
@@ -57,5 +60,8 @@
     "prisma": "^5.18.0",
     "tailwindcss": "^4",
     "typescript": "^5"
+  },
+  "prisma": {
+    "seed": "node prisma/seed.js"
   }
 }

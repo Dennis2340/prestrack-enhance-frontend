@@ -2,7 +2,6 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { Menu, X } from "lucide-react";
-import { BUSINESS_CONFIG } from "../../config";
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -29,29 +28,29 @@ const Navbar = () => {
       <div className="h-full px-4 sm:px-6 lg:px-8 mx-auto max-w-7xl flex items-center justify-between">
         <Link href="/" className="flex items-center">
           <span className="text-2xl font-bold bg-gradient-to-r from-green-600 to-teal-400 text-transparent bg-clip-text transition-all duration-300 hover:from-teal-500 hover:to-green-500">
-            {BUSINESS_CONFIG.name}
+            PresTrack
           </span>
         </Link>
 
         {/* Desktop Navigation */}
         <div className="hidden sm:flex items-center space-x-6">
           <Link
-            href="/chat"
-            className="font-medium text-gray-600 hover:text-teal-600 transition-colors duration-300"
-          >
-            Chat as Guest
-          </Link>
-          <Link
-            href="/agent/login"
+            href="/admin/providers"
             className="font-medium text-gray-600 hover:text-green-600 transition-colors duration-300"
           >
-            Agent Login
+            Care Providers
           </Link>
           <Link
-            href="/api/auth/login"
-            className="px-4 py-2 bg-gradient-to-r from-green-500 to-teal-500 text-white font-medium rounded-md hover:from-green-600 hover:to-teal-600 transition-all duration-300 shadow-sm hover:shadow"
+            href="/admin/rag"
+            className="font-medium text-gray-600 hover:text-green-600 transition-colors duration-300"
           >
-            Admin Login
+            RAG Ingestion
+          </Link>
+          <Link
+            href="/login"
+            className="font-medium text-gray-600 hover:text-green-600 transition-colors duration-300"
+          >
+            Login
           </Link>
         </div>
 
@@ -79,25 +78,25 @@ const Navbar = () => {
       >
         <div className="flex flex-col p-4 space-y-4">
           <Link
-            href="/chat"
-            className="px-3 py-2 rounded-md text-gray-700 hover:bg-teal-50 hover:text-teal-600 transition-colors duration-300"
-            onClick={() => setIsOpen(false)}
-          >
-            Chat as Guest
-          </Link>
-          <Link
-            href="/agent/login"
+            href="/admin/providers"
             className="px-3 py-2 rounded-md text-gray-700 hover:bg-green-50 hover:text-green-600 transition-colors duration-300"
             onClick={() => setIsOpen(false)}
           >
-            Agent Login
+            Care Providers
           </Link>
           <Link
-            href="/api/auth/login"
-            className="px-3 py-2 rounded-md bg-gradient-to-r from-green-500 to-teal-500 text-white font-medium text-center hover:from-green-600 hover:to-teal-600 transition-all duration-300 shadow-sm"
+            href="/admin/rag"
+            className="px-3 py-2 rounded-md text-gray-700 hover:bg-green-50 hover:text-green-600 transition-colors duration-300"
             onClick={() => setIsOpen(false)}
           >
-            Admin Login
+            RAG Ingestion
+          </Link>
+          <Link
+            href="/login"
+            className="px-3 py-2 rounded-md text-gray-700 hover:bg-green-50 hover:text-green-600 transition-colors duration-300"
+            onClick={() => setIsOpen(false)}
+          >
+            Login
           </Link>
         </div>
       </div>
