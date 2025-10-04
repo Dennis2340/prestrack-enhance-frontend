@@ -88,6 +88,46 @@ export async function POST(req: Request) {
       } catch {}
     })()
 
+    // Identify subject and ensure visitor onboarding for unknown users
+    let isPatient = false
+    let visitorId: string | null = null
+    let visitorName: string | null = null
+    try {
+      const ccP = await prisma.contactChannel.findFirst({ where: { type: 'whatsapp', value: phoneE164, patientId: { not: null } }, select: { patientId: true } })
+      if (ccP?.patientId) {
+        isPatient = true
+      } else {
+        // Try existing visitor
+        const vis = await prisma.visitor.findFirst({ where: { contacts: { some: { type: 'whatsapp', value: phoneE164 } } }, select: { id: true, displayName: true } })
+        if (vis) {
+          visitorId = vis.id
+          visitorName = vis.displayName || null
+        } else {
+          // Create Visitor + ContactChannel
+          const created = await prisma.visitor.create({ data: { displayName: null, contacts: { create: { ownerType: 'visitor', type: 'whatsapp', value: phoneE164, verified: true, preferred: true } } } })
+          visitorId = created.id
+          visitorName = null
+        }
+      }
+    } catch {}
+
+    // If visitor without a name, attempt to capture/confirm their name first
+    if (!isPatient && visitorId) {
+      const incoming = String(text || '').trim()
+      const looksLikeName = incoming && /^[A-Za-z\s.'-]{2,60}$/.test(incoming)
+      if (!visitorName) {
+        if (looksLikeName) {
+          try {
+            await prisma.visitor.update({ where: { id: visitorId }, data: { displayName: incoming } })
+          } catch {}
+          const greet = `Thanks, ${incoming}! How can I help you today?`
+          return NextResponse.json({ status: 'ok', answer: greet })
+        }
+        const promptName = `Welcome! I'm your clinic assistant. What's your name?`
+        return NextResponse.json({ status: 'ok', answer: promptName })
+      }
+    }
+
     // Fully agentic reply
     let final = ''
     try {
