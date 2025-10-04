@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 
-export async function GET(_req: Request, { params }: { params: { id: string } }) {
+export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const id = params.id
+    const id = (await params).id
     if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
 
     const patient = await prisma.patient.findUnique({ where: { id } })

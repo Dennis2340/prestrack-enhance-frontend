@@ -2,9 +2,9 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { enqueueIngestion } from '@/lib/geneline'
 
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const id = params.id
+    const id = (await params).id
     if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
 
     const { files } = await req.json().catch(() => ({})) as { files?: Array<{ url: string; filename?: string; mime?: string }> }

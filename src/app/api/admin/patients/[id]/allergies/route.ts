@@ -7,9 +7,9 @@ async function notifyProviders(patientId: string, msg: string) {
   await Promise.allSettled(providers.map(p => p.phoneE164 ? sendWhatsAppViaGateway({ toE164: p.phoneE164, body: msg }) : Promise.resolve()))
 }
 
-export async function GET(_req: Request, { params }: { params: { id: string } }) {
+export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const id = params.id
+    const id = (await params).id
     if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
     const doc = await prisma.document.findFirst({ where: { patientId: id, typeCode: 'allergies' }, orderBy: { updatedAt: 'desc' } })
     return NextResponse.json({ allergies: (doc?.metadata as any) || null })
@@ -18,9 +18,9 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   }
 }
 
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const id = params.id
+    const id = (await params).id
     if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
     const { allergies, notifyProviders: notify } = await req.json().catch(() => ({}))
     if (!allergies || typeof allergies !== 'object') return NextResponse.json({ error: 'allergies object required' }, { status: 400 })

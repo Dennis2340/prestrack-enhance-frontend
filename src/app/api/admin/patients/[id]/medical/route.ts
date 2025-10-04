@@ -10,9 +10,9 @@ async function notifyProviders(patientId: string, msg: string) {
   )
 }
 
-export async function GET(_req: Request, { params }: { params: { id: string } }) {
+export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { id } = params
+    const id = (await params).id
     if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
     const doc = await prisma.document.findFirst({
       where: { patientId: id, typeCode: 'medical_history' },
@@ -25,9 +25,9 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   }
 }
 
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { id } = params
+    const id = (await params).id
     if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
     const { history, notifyProviders: notify } = await req.json().catch(() => ({}))
     if (!history || typeof history !== 'object') return NextResponse.json({ error: 'history object required' }, { status: 400 })

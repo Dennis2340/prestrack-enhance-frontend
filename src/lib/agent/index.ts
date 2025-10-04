@@ -49,11 +49,22 @@ export async function agentRespond(opts: {
   const topK = Number(opts.topK ?? process.env.RAG_DEFAULT_TOPK ?? 5);
 
   // Always call RAG first; keep simple scaffolding for now
-  const { results } = await ragSearch({ query: msg, topK, sessionKey: getRagSessionKey() || undefined });
+  const phoneCtx = getAgentIncomingPhone() || undefined;
+  const { results } = await ragSearch({ query: msg, topK, sessionKey: getRagSessionKey() || undefined, patientPhoneE164: phoneCtx });
 
   // Placeholder answer for now; API layer can replace with full agent later
   let answer = "";
   let billable = false;
+
+  // Basic summarizer over matches when no external LLM is wired
+  if (!answer && results.length > 0) {
+    const top = results.slice(0, Math.min(3, results.length));
+    const lines = [
+      top.length === 1 ? `I found 1 relevant source:` : `I found ${top.length} relevant sources:`,
+      ...top.map((r, i) => `${i + 1}. ${r.title}${r.sourceUrl ? ` — ${r.sourceUrl}` : ""}`),
+    ];
+    answer = lines.join("\n");
+  }
 
   if (opts.whatsappStyle) {
     answer = formatWhatsApp(answer);

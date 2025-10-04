@@ -29,16 +29,16 @@ export default function PatientDetailPage() {
   const [sources, setSources] = useState<Source[]>([]);
   // Tabs state
   const [tab, setTab] = useState("overview");
-  // Medical history form
-  const [conditions, setConditions] = useState("");
-  const [surgeries, setSurgeries] = useState("");
-  const [familyHistory, setFamilyHistory] = useState("");
-  const [socialHistory, setSocialHistory] = useState("");
+  // Medical history form (repeatable inputs)
+  const [conditionsArr, setConditionsArr] = useState<string[]>([""]);
+  const [surgeriesArr, setSurgeriesArr] = useState<string[]>([""]);
+  const [familyHistoryArr, setFamilyHistoryArr] = useState<string[]>([""]);
+  const [socialHistoryArr, setSocialHistoryArr] = useState<string[]>([""]);
   const [mhNotify, setMhNotify] = useState(false);
   // Allergies form
-  const [allergen, setAllergen] = useState("");
-  const [reaction, setReaction] = useState("");
-  const [severity, setSeverity] = useState("");
+  const [allergyRows, setAllergyRows] = useState<Array<{ allergen: string; reaction?: string; severity?: string }>>([
+    { allergen: "", reaction: "", severity: "" },
+  ]);
   const [allNotify, setAllNotify] = useState(false);
   const [allergiesList, setAllergiesList] = useState<any>(null);
   // Vitals form+list
@@ -255,8 +255,22 @@ export default function PatientDetailPage() {
                 ) : (
                   sources.map((s) => (
                     <div key={s.url} className="border rounded p-2">
-                      <div className="text-xs font-mono break-all">{s.url}</div>
-                      <div className="text-xs text-gray-600">{s.stage ? `${s.stage}` : "queued"}{typeof s.progress === "number" ? ` • ${s.progress}%` : ""}</div>
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="text-xs font-mono break-all">{s.url}</div>
+                          <div className="text-xs text-gray-600">{s.stage ? `${s.stage}` : "queued"}{typeof s.progress === "number" ? ` • ${s.progress}%` : ""}</div>
+                        </div>
+                        <button
+                          className="text-xs px-2 py-1 border rounded hover:bg-red-50"
+                          onClick={async () => {
+                            try {
+                              await fetch('/api/admin/geneline/delete', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ url: s.url }) })
+                            } catch {}
+                            const next = sources.filter(x => x.url !== s.url)
+                            saveSources(next)
+                          }}
+                        >Delete</button>
+                      </div>
                     </div>
                   ))
                 )}
@@ -285,25 +299,69 @@ export default function PatientDetailPage() {
         </Tabs.Content>
 
         <Tabs.Content value="medical" className="mt-3">
-          <div className="border rounded p-4 space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-sm font-medium mb-1">Conditions</label>
-                <input value={conditions} onChange={(e) => setConditions(e.target.value)} className="border rounded px-3 py-2 w-full" placeholder="Diabetes, Hypertension" />
+          <div className="border rounded p-4 space-y-5">
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-sm font-medium">Conditions</label>
+                <button type="button" className="text-sm px-2 py-1 border rounded" onClick={() => setConditionsArr((a) => [...a, ""]) }>Add more</button>
               </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Surgeries</label>
-                <input value={surgeries} onChange={(e) => setSurgeries(e.target.value)} className="border rounded px-3 py-2 w-full" placeholder="Appendectomy (2019)" />
+              <div className="space-y-2">
+                {conditionsArr.map((v, idx) => (
+                  <div key={`cond-${idx}`} className="flex gap-2">
+                    <input value={v} onChange={(e)=>{
+                      const next=[...conditionsArr]; next[idx]=e.target.value; setConditionsArr(next);
+                    }} className="border rounded px-3 py-2 w-full" placeholder="e.g., Diabetes" />
+                    <button type="button" className="px-2 border rounded" onClick={()=> setConditionsArr((a)=> a.filter((_,i)=>i!==idx))}>Remove</button>
+                  </div>
+                ))}
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-sm font-medium mb-1">Family history</label>
-                <input value={familyHistory} onChange={(e) => setFamilyHistory(e.target.value)} className="border rounded px-3 py-2 w-full" placeholder="Mother: HTN" />
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-sm font-medium">Surgeries</label>
+                <button type="button" className="text-sm px-2 py-1 border rounded" onClick={() => setSurgeriesArr((a) => [...a, ""]) }>Add more</button>
               </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Social history</label>
-                <input value={socialHistory} onChange={(e) => setSocialHistory(e.target.value)} className="border rounded px-3 py-2 w-full" placeholder="Non-smoker, occasional alcohol" />
+              <div className="space-y-2">
+                {surgeriesArr.map((v, idx) => (
+                  <div key={`surg-${idx}`} className="flex gap-2">
+                    <input value={v} onChange={(e)=>{
+                      const next=[...surgeriesArr]; next[idx]=e.target.value; setSurgeriesArr(next);
+                    }} className="border rounded px-3 py-2 w-full" placeholder="e.g., Appendectomy (2019)" />
+                    <button type="button" className="px-2 border rounded" onClick={()=> setSurgeriesArr((a)=> a.filter((_,i)=>i!==idx))}>Remove</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-sm font-medium">Family history</label>
+                <button type="button" className="text-sm px-2 py-1 border rounded" onClick={() => setFamilyHistoryArr((a) => [...a, ""]) }>Add more</button>
+              </div>
+              <div className="space-y-2">
+                {familyHistoryArr.map((v, idx) => (
+                  <div key={`fam-${idx}`} className="flex gap-2">
+                    <input value={v} onChange={(e)=>{
+                      const next=[...familyHistoryArr]; next[idx]=e.target.value; setFamilyHistoryArr(next);
+                    }} className="border rounded px-3 py-2 w-full" placeholder="e.g., Mother: Hypertension" />
+                    <button type="button" className="px-2 border rounded" onClick={()=> setFamilyHistoryArr((a)=> a.filter((_,i)=>i!==idx))}>Remove</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-sm font-medium">Social history</label>
+                <button type="button" className="text-sm px-2 py-1 border rounded" onClick={() => setSocialHistoryArr((a) => [...a, ""]) }>Add more</button>
+              </div>
+              <div className="space-y-2">
+                {socialHistoryArr.map((v, idx) => (
+                  <div key={`soc-${idx}`} className="flex gap-2">
+                    <input value={v} onChange={(e)=>{
+                      const next=[...socialHistoryArr]; next[idx]=e.target.value; setSocialHistoryArr(next);
+                    }} className="border rounded px-3 py-2 w-full" placeholder="e.g., Non-smoker" />
+                    <button type="button" className="px-2 border rounded" onClick={()=> setSocialHistoryArr((a)=> a.filter((_,i)=>i!==idx))}>Remove</button>
+                  </div>
+                ))}
               </div>
             </div>
             <label className="inline-flex items-center gap-2 text-sm"><input type="checkbox" checked={mhNotify} onChange={(e) => setMhNotify(e.target.checked)} /> Notify providers</label>
@@ -311,10 +369,10 @@ export default function PatientDetailPage() {
               <button className="bg-blue-600 text-white px-4 py-2 rounded" onClick={async () => {
                 if (!detail?.patient?.id) return
                 const payload = {
-                  conditions: conditions.split(',').map(s=>s.trim()).filter(Boolean),
-                  surgeries: surgeries.split(',').map(s=>s.trim()).filter(Boolean),
-                  familyHistory,
-                  socialHistory,
+                  conditions: conditionsArr.map(s=>s.trim()).filter(Boolean).map(t=>({ text: t })),
+                  surgeries: surgeriesArr.map(s=>s.trim()).filter(Boolean).map(t=>({ text: t })),
+                  familyHistory: familyHistoryArr.map(s=>s.trim()).filter(Boolean),
+                  socialHistory: socialHistoryArr.map(s=>s.trim()).filter(Boolean),
                 }
                 const res = await fetch(`/api/admin/patients/${detail.patient.id}/medical`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ history: payload, notifyProviders: mhNotify }) })
                 const d = await res.json(); if (!res.ok) alert(d?.error || 'Failed');
@@ -325,33 +383,41 @@ export default function PatientDetailPage() {
 
         <Tabs.Content value="allergies" className="mt-3">
           <div className="border rounded p-4 space-y-4">
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <label className="block text-sm font-medium mb-1">Allergen</label>
-                <input value={allergen} onChange={(e) => setAllergen(e.target.value)} className="border rounded px-3 py-2 w-full" placeholder="Penicillin" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Reaction</label>
-                <input value={reaction} onChange={(e) => setReaction(e.target.value)} className="border rounded px-3 py-2 w-full" placeholder="Rash" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Severity</label>
-                <select value={severity} onChange={(e) => setSeverity(e.target.value)} className="border rounded px-3 py-2 w-full">
-                  <option value="">Select…</option>
-                  <option value="mild">Mild</option>
-                  <option value="moderate">Moderate</option>
-                  <option value="severe">Severe</option>
-                </select>
-              </div>
+            <div className="flex items-center justify-between">
+              <div className="text-sm font-medium">Allergies</div>
+              <button type="button" className="text-sm px-2 py-1 border rounded" onClick={() => setAllergyRows((rows)=> [...rows, { allergen: "", reaction: "", severity: "" }])}>Add more</button>
+            </div>
+            <div className="space-y-3">
+              {allergyRows.map((row, idx) => (
+                <div key={`alg-${idx}`} className="grid grid-cols-3 gap-3">
+                  <input value={row.allergen} onChange={(e)=>{
+                    const next=[...allergyRows]; next[idx] = { ...next[idx], allergen: e.target.value }; setAllergyRows(next);
+                  }} className="border rounded px-3 py-2 w-full" placeholder="Penicillin" />
+                  <input value={row.reaction} onChange={(e)=>{
+                    const next=[...allergyRows]; next[idx] = { ...next[idx], reaction: e.target.value }; setAllergyRows(next);
+                  }} className="border rounded px-3 py-2 w-full" placeholder="Rash" />
+                  <div className="flex gap-2">
+                    <select value={row.severity} onChange={(e) => {
+                      const next=[...allergyRows]; next[idx] = { ...next[idx], severity: e.target.value }; setAllergyRows(next);
+                    }} className="border rounded px-3 py-2 w-full">
+                      <option value="">Severity…</option>
+                      <option value="mild">Mild</option>
+                      <option value="moderate">Moderate</option>
+                      <option value="severe">Severe</option>
+                    </select>
+                    <button type="button" className="px-2 border rounded" onClick={()=> setAllergyRows((a)=> a.filter((_,i)=>i!==idx))}>Remove</button>
+                  </div>
+                </div>
+              ))}
             </div>
             <label className="inline-flex items-center gap-2 text-sm"><input type="checkbox" checked={allNotify} onChange={(e) => setAllNotify(e.target.checked)} /> Notify providers</label>
             <div className="flex items-center justify-end">
               <button className="bg-blue-600 text-white px-4 py-2 rounded" onClick={async () => {
                 if (!detail?.patient?.id) return
                 const payload = {
-                  list: [
-                    allergen ? { allergen, reaction, severity } : null,
-                  ].filter(Boolean)
+                  list: allergyRows
+                    .map(r => ({ allergen: r.allergen?.trim(), reaction: r.reaction?.trim(), severity: r.severity || undefined }))
+                    .filter(r => r.allergen),
                 }
                 const res = await fetch(`/api/admin/patients/${detail.patient.id}/allergies`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ allergies: payload, notifyProviders: allNotify }) })
                 const d = await res.json(); if (!res.ok) alert(d?.error || 'Failed');

@@ -12,6 +12,7 @@ const nav = [
   { href: "/dashboard/patients", label: "Patients", icon: Users },
   { href: "/dashboard/visitors", label: "Visitors", icon: Users },
   { href: "/dashboard/conversations", label: "Conversations", icon: MessageSquare },
+  { href: "/dashboard/test", label: "Test", icon: MessageSquare },
   { href: "/dashboard/medications", label: "Medications", icon: Pill },
   { href: "/dashboard/escalations", label: "Escalations", icon: AlertTriangle },
   { href: "/dashboard/admin", label: "Admin", icon: Shield },

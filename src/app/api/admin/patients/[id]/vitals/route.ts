@@ -7,9 +7,9 @@ async function notifyProviders(patientId: string, msg: string) {
   await Promise.allSettled(providers.map(p => p.phoneE164 ? sendWhatsAppViaGateway({ toE164: p.phoneE164, body: msg }) : Promise.resolve()))
 }
 
-export async function GET(_req: Request, { params }: { params: { id: string } }) {
+export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const id = params.id
+    const id = (await params).id
     if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
     const docs = await prisma.document.findMany({ where: { patientId: id, typeCode: 'vital' }, orderBy: { createdAt: 'desc' }, take: 100 })
     const items = docs.map(d => ({ ...(d.metadata as any), recordedAt: d.createdAt }))
@@ -19,9 +19,9 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   }
 }
 
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const id = params.id
+    const id = (await params).id
     if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
     const { type, value, units, notifyProviders: notify } = await req.json().catch(() => ({}))
     if (!type || !value) return NextResponse.json({ error: 'type and value required' }, { status: 400 })
