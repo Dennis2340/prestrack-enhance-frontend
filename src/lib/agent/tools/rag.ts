@@ -35,10 +35,15 @@ export async function ragSearch({
 }): Promise<{ results: RagSearchResult[] }> {
   const namespace = process.env.GENELINE_X_NAMESPACE || "default";
   const k = Number(topK ?? process.env.RAG_DEFAULT_TOPK ?? 5);
+  try {
+    console.log(`[rag] query="%s" topK=%s ns="%s" sessionKey=%s filter.patientPhone=%s`,
+      String(query).slice(0, 120), k, namespace, sessionKey ? 'yes' : 'no', patientPhoneE164 || 'none')
+  } catch {}
   const key = makeKey(namespace, query, k, sessionKey);
   const now = Date.now();
   const hit = RAG_CACHE.get(key);
   if (hit && now - hit.at < RAG_TTL_MS) {
+    try { console.log(`[rag] cache_hit results=%d`, hit.results.length) } catch {}
     return { results: hit.results };
   }
 
@@ -73,5 +78,6 @@ export async function ragSearch({
   });
 
   RAG_CACHE.set(key, { at: now, results });
+  try { console.log(`[rag] results=%d (k=%d)`, results.length, k) } catch {}
   return { results };
 }

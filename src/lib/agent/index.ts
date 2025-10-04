@@ -1,6 +1,8 @@
 // Core agent entry. Minimal, safe scaffolding to be wired into API later.
 
 import { ragSearch } from "./tools/rag";
+import OpenAI from "openai";
+import prisma from "@/lib/prisma";
 
 export type AgentHistoryItem = { role: "user" | "assistant" | "system"; content: string };
 export type RagSearchResult = { title: string; text: string; score: number; sourceUrl?: string };
@@ -48,15 +50,53 @@ export async function agentRespond(opts: {
   const msg = String(opts.message || "").trim();
   const topK = Number(opts.topK ?? process.env.RAG_DEFAULT_TOPK ?? 5);
 
-  // Always call RAG first; keep simple scaffolding for now
-  const phoneCtx = getAgentIncomingPhone() || undefined;
-  const { results } = await ragSearch({ query: msg, topK, sessionKey: getRagSessionKey() || undefined, patientPhoneE164: phoneCtx });
+  // Resolve scope: try patient by phone; if not found -> general RAG (works for visitors/unknown)
+  const rawPhone = getAgentIncomingPhone();
+  const phoneE164 = rawPhone && /^\+\d{6,15}$/.test(rawPhone) ? rawPhone : undefined;
+  let patientScopedPhone: string | undefined = undefined;
+  try {
+    if (phoneE164) {
+      const patient = await prisma.patient.findFirst({ where: { phoneE164: phoneE164 } });
+      if (patient) patientScopedPhone = phoneE164;
+    }
+  } catch (e:any) {
+    console.error('[agent->scope] lookup error', e?.message || e);
+  }
+  try { console.log(`[agent] scope=%s`, patientScopedPhone ? 'patient' : 'general') } catch {}
+  const { results } = await ragSearch({ query: msg, topK, sessionKey: getRagSessionKey() || undefined, patientPhoneE164: patientScopedPhone });
 
-  // Placeholder answer for now; API layer can replace with full agent later
+  // Compose with OpenAI when configured
   let answer = "";
   let billable = false;
+  const hasOpenAI = !!process.env.OPENAI_API_KEY;
+  try {
+    console.log(`[agent] message len=%d topK=%d scope=%s patientPhone=%s openai=%s matches=%d`,
+      msg.length, topK, patientScopedPhone ? 'patient' : 'general', patientScopedPhone ? 'yes' : 'no', hasOpenAI ? 'yes' : 'no', results.length)
+  } catch {}
 
-  // Basic summarizer over matches when no external LLM is wired
+  if (hasOpenAI) {
+    try {
+      const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+      const sys = `You are a helpful clinical assistant. Use the provided context snippets to answer. If unsure, say you don't know.`;
+      const context = results.slice(0, Math.max(1, Math.min(8, topK))).map((r, i) => `# Source ${i + 1}: ${r.title}${r.sourceUrl ? `\nURL: ${r.sourceUrl}` : ''}\n${r.text}`).join("\n\n");
+      const prompt = `Question: ${msg}\n\nContext:\n${context}\n\nAnswer:`;
+      const completion = await client.chat.completions.create({
+        model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+        temperature: 0.2,
+        messages: [
+          { role: 'system', content: sys },
+          ...(opts.history || []).map(h => ({ role: h.role, content: h.content } as any)),
+          { role: 'user', content: prompt },
+        ],
+      });
+      answer = (completion.choices?.[0]?.message?.content || '').trim();
+      billable = true;
+    } catch (e: any) {
+      console.error('[agent->openai] error', e?.message || e);
+    }
+  }
+
+  // Fallback summarizer if OpenAI missing or failed
   if (!answer && results.length > 0) {
     const top = results.slice(0, Math.min(3, results.length));
     const lines = [
