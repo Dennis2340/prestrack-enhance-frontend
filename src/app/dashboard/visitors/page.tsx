@@ -8,6 +8,10 @@ export default function VisitorsPage() {
   const [items, setItems] = useState<VisitorItem[]>([])
   const [loading, setLoading] = useState(true)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [active, setActive] = useState<VisitorItem | null>(null)
+  const [messages, setMessages] = useState<any[]>([])
+  const [convLoading, setConvLoading] = useState(false)
+  const [reply, setReply] = useState('')
 
   async function load() {
     setLoading(true)
@@ -50,6 +54,15 @@ export default function VisitorsPage() {
               <div>{v.phoneE164 || '-'}</div>
               <div className="text-xs text-gray-500">{new Date(v.createdAt).toLocaleString()}</div>
               <div className="text-xs">
+                <button className="text-blue-600 hover:underline mr-3" onClick={async ()=>{
+                  setActive(v); setMessages([]); setReply(''); setConvLoading(true)
+                  try {
+                    const url = `/api/admin/conversations/by-subject?subjectType=visitor&subjectId=${encodeURIComponent(v.id)}&take=50`
+                    const res = await fetch(url, { cache: 'no-store' })
+                    const data = await res.json(); if (res.ok) setMessages(data.messages || [])
+                  } catch {}
+                  finally { setConvLoading(false) }
+                }}>View</button>
                 <button
                   className="text-red-600 hover:underline disabled:opacity-50"
                   disabled={deletingId === v.id}
@@ -69,6 +82,57 @@ export default function VisitorsPage() {
           ))
         )}
       </div>
+
+      {/* Detail drawer */}
+      {active && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={()=> setActive(null)} />
+          <div className="relative bg-white w-full max-w-3xl rounded shadow-lg p-4">
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <div className="text-lg font-semibold">Visitor</div>
+                <div className="text-xs text-gray-500">{active.phoneE164 || ''}</div>
+              </div>
+              <button onClick={()=> setActive(null)} className="text-gray-500">✕</button>
+            </div>
+            <div className="space-y-2">
+              <div className="text-sm font-medium">Conversation</div>
+              {convLoading ? (
+                <div className="text-sm">Loading…</div>
+              ) : (
+                <div className="border rounded max-h-80 overflow-auto divide-y">
+                  {messages.length === 0 ? (
+                    <div className="p-3 text-sm text-gray-500">No messages</div>
+                  ) : (
+                    messages.map((m:any) => (
+                      <div key={m.id} className="p-3 text-sm">
+                        <div className="text-xs text-gray-500 mb-1">{m.direction} via {m.via} · {new Date(m.createdAt).toLocaleString()}</div>
+                        <div className="whitespace-pre-wrap">{m.body}</div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+              <div className="flex items-center gap-2">
+                <input value={reply} onChange={e=> setReply(e.target.value)} className="border rounded px-3 py-2 w-full" placeholder="Reply to visitor…" />
+                <button onClick={async ()=>{
+                  if (!reply.trim()) return
+                  try {
+                    const res = await fetch(`/api/admin/visitors/${active.id}/message`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ body: reply }) })
+                    const d = await res.json(); if (!res.ok) throw new Error(d?.error || 'Failed')
+                    setReply('')
+                    // reload
+                    setConvLoading(true)
+                    const url = `/api/admin/conversations/by-subject?subjectType=visitor&subjectId=${encodeURIComponent(active.id)}&take=50`
+                    const r2 = await fetch(url, { cache: 'no-store' }); const d2 = await r2.json(); if (r2.ok) setMessages(d2.messages || [])
+                  } catch(e:any) { alert(e?.message || 'Failed') }
+                  finally { setConvLoading(false) }
+                }} className="bg-green-600 text-white px-3 py-2 rounded">Send</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
