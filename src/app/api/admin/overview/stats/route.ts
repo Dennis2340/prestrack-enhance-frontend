@@ -6,10 +6,12 @@ export async function GET(req: NextRequest) {
   const auth = requireAuth(req)
   if ('cookies' in auth) return auth as any
   try {
-    const [patients, conversations, tasks] = await Promise.all([
+    const [patients, conversations, tasks, messages, careProviders] = await Promise.all([
       prisma.patient.count(),
       prisma.conversation.count(),
       prisma.task.count(),
+      prisma.commMessage.count(),
+      prisma.providerProfile.count(),
     ])
     const latestPrescriptions = await prisma.prescription.findMany({
       orderBy: { createdAt: 'desc' },
@@ -22,7 +24,7 @@ export async function GET(req: NextRequest) {
       take: 5,
       select: { id: true, scheduledTime: true, prescription: { select: { id: true, medicationName: true, patient: { select: { id: true, firstName: true, lastName: true } } } } },
     })
-    return NextResponse.json({ patients, conversations, tasks, latestPrescriptions, upcomingReminders })
+    return NextResponse.json({ patients, conversations, tasks, messages, careProviders, latestPrescriptions, upcomingReminders })
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || 'failed' }, { status: 500 })
   }

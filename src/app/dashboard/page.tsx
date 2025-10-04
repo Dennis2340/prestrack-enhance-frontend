@@ -10,6 +10,8 @@ export default function DashboardOverview() {
   const [patients, setPatients] = useState<number>(0)
   const [conversations, setConversations] = useState<number>(0)
   const [tasks, setTasks] = useState<number>(0)
+  const [messages, setMessages] = useState<number>(0)
+  const [careProviders, setCareProviders] = useState<number>(0)
   const [latest, setLatest] = useState<RxBrief[]>([])
   const [upcoming, setUpcoming] = useState<UpcomingBrief[]>([])
 
@@ -22,6 +24,8 @@ export default function DashboardOverview() {
         setPatients(Number(d.patients || 0))
         setConversations(Number(d.conversations || 0))
         setTasks(Number(d.tasks || 0))
+        setMessages(Number(d.messages || 0))
+        setCareProviders(Number(d.careProviders || 0))
         setLatest(Array.isArray(d.latestPrescriptions) ? d.latestPrescriptions : [])
         setUpcoming(Array.isArray(d.upcomingReminders) ? d.upcomingReminders : [])
       }
@@ -37,10 +41,12 @@ export default function DashboardOverview() {
         <h1 className="text-2xl font-semibold">Overview</h1>
         <button onClick={load} className="px-3 py-1.5 rounded border text-sm">Refresh</button>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <div className="rounded-lg border bg-white p-4 text-gray-700">Patients: {loading ? '…' : patients}</div>
         <div className="rounded-lg border bg-white p-4 text-gray-700">Conversations: {loading ? '…' : conversations}</div>
         <div className="rounded-lg border bg-white p-4 text-gray-700">Tasks (Reminders): {loading ? '…' : tasks}</div>
+        <div className="rounded-lg border bg-white p-4 text-gray-700">Messages: {loading ? '…' : messages}</div>
+        <div className="rounded-lg border bg-white p-4 text-gray-700">Care Providers: {loading ? '…' : careProviders}</div>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="rounded-lg border bg-white p-4 text-gray-700">

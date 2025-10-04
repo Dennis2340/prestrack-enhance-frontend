@@ -79,6 +79,12 @@ export default function PatientDetailPage() {
   const [rxSystem, setRxSystem] = useState("")
   const [editCode, setEditCode] = useState("")
   const [editSystem, setEditSystem] = useState("")
+  // Patient-level reminders (not tied to a prescription)
+  const [remMessage, setRemMessage] = useState("")
+  const [remDate, setRemDate] = useState("") // YYYY-MM-DD
+  const [remTimes, setRemTimes] = useState<string>("09:00\n21:00")
+  const [remSubmitting, setRemSubmitting] = useState(false)
+  const [remUpcoming, setRemUpcoming] = useState<Array<{ id: string; scheduledTime: string; status: string; notes?: string }>>([])
 
   useEffect(() => {
     if (!detail?.patient?.id) return;
@@ -106,6 +112,14 @@ export default function PatientDetailPage() {
       try { el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' }) } catch {}
     })
   }, [convMessages.length, convLoading])
+
+  async function loadReminders() {
+    if (!detail?.patient?.id) return
+    try {
+      const res = await fetch(`/api/admin/patients/${detail.patient.id}/reminders`, { cache: 'no-store' })
+      const d = await res.json(); if (res.ok) setRemUpcoming(Array.isArray(d.items) ? d.items : [])
+    } catch {}
+  }
 
   async function load() {
     setLoading(true);
@@ -496,6 +510,42 @@ export default function PatientDetailPage() {
                   </div>
                 </div>
               )}
+              <div className="mt-5 border-t pt-3">
+                <div className="text-sm font-medium mb-2">Create Reminder (Patient)</div>
+                <div className="space-y-2">
+                  <input type="date" value={remDate} onChange={e=> setRemDate(e.target.value)} className="border rounded px-3 py-2 w-full" />
+                  <textarea value={remTimes} onChange={e=> setRemTimes(e.target.value)} className="border rounded w-full h-20 px-3 py-2 font-mono text-xs" placeholder="HH:MM per line" />
+                  <textarea value={remMessage} onChange={e=> setRemMessage(e.target.value)} className="border rounded w-full h-20 px-3 py-2 text-sm" placeholder="Optional message to include" />
+                  <div className="flex items-center justify-end gap-2">
+                    <button className="px-3 py-2 rounded border" onClick={()=>{ setRemDate(''); setRemTimes('09:00\n21:00'); setRemMessage('') }}>Clear</button>
+                    <button className="px-3 py-2 rounded bg-indigo-600 text-white disabled:opacity-50" disabled={remSubmitting || !remDate || !remTimes.trim()} onClick={async ()=>{
+                      if (!detail?.patient?.id) return
+                      const times = remTimes.split(/\n+/).map(s=>s.trim()).filter(Boolean)
+                      if (times.length === 0) { show('Enter at least one time', 'error'); return }
+                      setRemSubmitting(true)
+                      try {
+                        const res = await fetch(`/api/admin/patients/${detail.patient.id}/reminders`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ date: remDate, times, message: remMessage || undefined }) })
+                        const d = await res.json(); if (!res.ok) { show(d?.error || 'Failed', 'error') } else { show(`Queued ${d.created} reminders`, 'success'); setRemMessage(''); }
+                        await loadReminders()
+                      } catch(e:any) { show(e?.message || 'Failed', 'error') }
+                      finally { setRemSubmitting(false) }
+                    }}>Create</button>
+                  </div>
+                </div>
+                <div className="mt-3">
+                  <div className="text-xs font-medium mb-1">Upcoming reminders</div>
+                  <div className="space-y-1 max-h-48 overflow-auto">
+                    {remUpcoming.length === 0 ? (
+                      <div className="text-xs text-gray-500">None scheduled.</div>
+                    ) : remUpcoming.map(r => (
+                      <div key={r.id} className="text-xs flex items-center justify-between border rounded px-2 py-1">
+                        <div>{new Date(r.scheduledTime).toLocaleString()}</div>
+                        <div className="text-gray-500">{r.status}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </Tabs.Content>
@@ -705,7 +755,7 @@ export default function PatientDetailPage() {
           </div>
         </Tabs.Content>
         
-        <Tabs.Content value="ask" className="mt-3" forceMount>
+        <Tabs.Content value="ask" className="mt-3">
           <div className="border rounded p-3 space-y-3">
             <div className="text-base font-medium">Ask Prestrack</div>
             <div className="text-sm text-gray-600">Prestrack will use this patient's messages and records to answer concisely.</div>
