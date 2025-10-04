@@ -60,20 +60,22 @@ export async function POST(req: Request) {
           }
         } catch {}
 
-        // Create medical escalation record and notify providers
+        // Create medical escalation ONLY for patients; visitors are logged without escalation
         const summary = `Media received${text ? ` — ${String(text).slice(0, 180)}` : ''}`
-        await createMedicalEscalation({
-          phoneE164,
-          summary,
-          subjectType,
-          subjectId,
-          media: {
-            mimeType: mime,
-            url: mediaObj?.url || mediaObj?.mediaUrl || null,
-            filename: mediaObj?.filename || null,
-            sizeBytes: typeof mediaObj?.size === 'number' ? mediaObj.size : undefined,
-          },
-        })
+        if (subjectType === 'patient' && subjectId) {
+          await createMedicalEscalation({
+            phoneE164,
+            summary,
+            subjectType,
+            subjectId,
+            media: {
+              mimeType: mime,
+              url: mediaObj?.url || mediaObj?.mediaUrl || null,
+              filename: mediaObj?.filename || null,
+              sizeBytes: typeof mediaObj?.size === 'number' ? mediaObj.size : undefined,
+            },
+          })
+        }
 
         // Log inbound media into the conversation as a JSON body so UI can render it
         try {
@@ -104,9 +106,6 @@ export async function POST(req: Request) {
         try {
           if (subjectType === 'patient' && subjectId) {
             const convo = await prisma.conversation.findFirst({ where: { patientId: subjectId, subjectType: 'patient' as any }, orderBy: { updatedAt: 'desc' } })
-            if (convo) await prisma.commMessage.create({ data: { conversationId: convo.id, direction: 'outbound', via: 'whatsapp', body: `[AUTO ESCALATION CREATED] ${summary}`, senderType: 'system' } })
-          } else if (subjectType === 'visitor' && subjectId) {
-            const convo = await prisma.conversation.findFirst({ where: { visitorId: subjectId, subjectType: 'visitor' as any }, orderBy: { updatedAt: 'desc' } })
             if (convo) await prisma.commMessage.create({ data: { conversationId: convo.id, direction: 'outbound', via: 'whatsapp', body: `[AUTO ESCALATION CREATED] ${summary}`, senderType: 'system' } })
           }
         } catch {}
