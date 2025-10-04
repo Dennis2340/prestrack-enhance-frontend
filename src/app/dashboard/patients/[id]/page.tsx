@@ -42,6 +42,8 @@ export default function PatientDetailPage() {
   ]);
   const [allNotify, setAllNotify] = useState(false);
   const [allergiesList, setAllergiesList] = useState<any>(null);
+  // Medical history current
+  const [medicalHistory, setMedicalHistory] = useState<any>(null);
   // Vitals form+list
   const [vitalType, setVitalType] = useState("bp");
   const [vitalValue, setVitalValue] = useState("");
@@ -147,6 +149,29 @@ export default function PatientDetailPage() {
     }
     if (tab === 'vitals') {
       fetch(`/api/admin/patients/${detail.patient.id}/vitals`).then(r => r.json()).then(d => setVitals(d.items || [])).catch(() => {})
+    }
+    if (tab === 'medical') {
+      fetch(`/api/admin/patients/${detail.patient.id}/medical`).then(r=> r.json()).then(d=>{
+        const hist = d.history || null
+        setMedicalHistory(hist)
+        // If form is empty (initial single "" entries), prefill from saved history to help editing
+        try {
+          if (hist) {
+            if (Array.isArray(hist.conditions) && conditionsArr.length === 1 && !conditionsArr[0]) {
+              setConditionsArr(hist.conditions.map((c:any)=> typeof c === 'string' ? c : (c?.text||'')).filter(Boolean))
+            }
+            if (Array.isArray(hist.surgeries) && surgeriesArr.length === 1 && !surgeriesArr[0]) {
+              setSurgeriesArr(hist.surgeries.map((c:any)=> typeof c === 'string' ? c : (c?.text||'')).filter(Boolean))
+            }
+            if (Array.isArray(hist.familyHistory) && familyHistoryArr.length === 1 && !familyHistoryArr[0]) {
+              setFamilyHistoryArr(hist.familyHistory.filter(Boolean))
+            }
+            if (Array.isArray(hist.socialHistory) && socialHistoryArr.length === 1 && !socialHistoryArr[0]) {
+              setSocialHistoryArr(hist.socialHistory.filter(Boolean))
+            }
+          }
+        } catch {}
+      }).catch(()=>{})
     }
   }, [tab, detail?.patient?.id])
 
@@ -647,7 +672,41 @@ export default function PatientDetailPage() {
                 }
                 const res = await fetch(`/api/admin/patients/${detail.patient.id}/medical`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ history: payload, notifyProviders: mhNotify }) })
                 const d = await res.json(); if (!res.ok) show(d?.error || 'Failed', 'error');
+                else setMedicalHistory(payload)
               }}>Save</button>
+            </div>
+            <div className="pt-2 border-t">
+              <div className="text-sm font-medium mb-1">Current medical history</div>
+              {medicalHistory ? (
+                <div className="text-sm text-gray-700 space-y-2">
+                  <div>
+                    <div className="font-medium text-xs uppercase text-gray-500">Conditions</div>
+                    <ul className="list-disc ml-5">
+                      {(medicalHistory.conditions||[]).map((c:any, i:number)=> <li key={`c-${i}`}>{typeof c==='string'? c : (c?.text||'')}</li>)}
+                    </ul>
+                  </div>
+                  <div>
+                    <div className="font-medium text-xs uppercase text-gray-500">Surgeries</div>
+                    <ul className="list-disc ml-5">
+                      {(medicalHistory.surgeries||[]).map((c:any, i:number)=> <li key={`s-${i}`}>{typeof c==='string'? c : (c?.text||'')}</li>)}
+                    </ul>
+                  </div>
+                  <div>
+                    <div className="font-medium text-xs uppercase text-gray-500">Family history</div>
+                    <ul className="list-disc ml-5">
+                      {(medicalHistory.familyHistory||[]).map((c:any, i:number)=> <li key={`f-${i}`}>{String(c)}</li>)}
+                    </ul>
+                  </div>
+                  <div>
+                    <div className="font-medium text-xs uppercase text-gray-500">Social history</div>
+                    <ul className="list-disc ml-5">
+                      {(medicalHistory.socialHistory||[]).map((c:any, i:number)=> <li key={`sh-${i}`}>{String(c)}</li>)}
+                    </ul>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-xs text-gray-500">No medical history saved yet.</div>
+              )}
             </div>
           </div>
         </Tabs.Content>
