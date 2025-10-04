@@ -106,22 +106,34 @@ export default function ProvidersDashboardPage() {
               <div>{p.phoneE164 || '-'}</div>
               <div className="text-xs text-gray-500">{new Date(p.createdAt).toLocaleString()}</div>
               <div className="text-xs flex items-center gap-3 justify-end">
-                <label className="hidden md:inline-flex items-center gap-1">
-                  <input type="checkbox" onChange={async (e)=>{
-                    try {
-                      await fetch('/api/admin/providers/update-privileges', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ userId: (p as any).userId, canUpdateEscalations: e.target.checked }) })
-                    } catch {}
-                  }} />
-                  <span>Can update</span>
-                </label>
-                <label className="hidden md:inline-flex items-center gap-1">
-                  <input type="checkbox" onChange={async (e)=>{
-                    try {
-                      await fetch('/api/admin/providers/update-privileges', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ userId: (p as any).userId, canCloseEscalations: e.target.checked }) })
-                    } catch {}
-                  }} />
-                  <span>Can close</span>
-                </label>
+                <div className="flex items-center gap-2">
+                  <label className="text-xs text-gray-600">Escalation rights</label>
+                  <select
+                    className="border rounded px-2 py-1 text-xs"
+                    defaultValue="none"
+                    onChange={async (e)=>{
+                      const v = e.target.value
+                      // Map select to flags and send a single update call (twice is ok if backend expects individual keys)
+                      const payload: any = { userId: (p as any).userId }
+                      if (v === 'none') { payload.canUpdateEscalations = false; payload.canCloseEscalations = false }
+                      if (v === 'update') { payload.canUpdateEscalations = true; payload.canCloseEscalations = false }
+                      if (v === 'close') { payload.canUpdateEscalations = true; payload.canCloseEscalations = true }
+                      try {
+                        await fetch('/api/admin/providers/update-privileges', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) })
+                      } catch {}
+                    }}
+                  >
+                    <option value="none">No access</option>
+                    <option value="update">Can update</option>
+                    <option value="close">Can update & close</option>
+                  </select>
+                </div>
+
+                <button
+                  className="px-2 py-1 rounded border text-red-600 hover:bg-red-50"
+                  onClick={()=> setConfirmDeleteId(p.id)}
+                >Delete</button>
+
                 {/* Actions menu */}
                 <div className="relative">
                   <button className="px-2 py-1 rounded border" onClick={()=> setActionOpenId(v => v === p.id ? null : p.id)}>⋮</button>

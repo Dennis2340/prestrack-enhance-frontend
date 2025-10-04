@@ -2,7 +2,7 @@
 
 import * as Dialog from "@radix-ui/react-dialog";
 import * as Tabs from "@radix-ui/react-tabs";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useToast } from "@/components/ui/ToastContext";
 // Defer heavy client helpers to runtime to reduce compile-time memory pressure
 import { useParams } from "next/navigation";
@@ -66,7 +66,19 @@ export default function PatientDetailPage() {
   // Conversation thread (patient vs AI/provider)
   const [convMessages, setConvMessages] = useState<any[]>([])
   const [convLoading, setConvLoading] = useState(false)
+  const convRef = useRef<HTMLDivElement | null>(null)
   const lsKey = useMemo(() => `patient_sources_${detail?.phoneE164 || "unknown"}`.replace(/[^a-zA-Z0-9_]/g, "_"), [detail?.phoneE164]);
+  // Prescriptions edit modal state
+  const [editingRxId, setEditingRxId] = useState<string | null>(null)
+  const [editName, setEditName] = useState("")
+  const [editStrength, setEditStrength] = useState("")
+  const [editForm, setEditForm] = useState("")
+  const [editStart, setEditStart] = useState("")
+  const [editEnd, setEditEnd] = useState("")
+  const [rxCode, setRxCode] = useState("")
+  const [rxSystem, setRxSystem] = useState("")
+  const [editCode, setEditCode] = useState("")
+  const [editSystem, setEditSystem] = useState("")
 
   useEffect(() => {
     if (!detail?.patient?.id) return;
@@ -84,6 +96,16 @@ export default function PatientDetailPage() {
     } catch {}
     finally { setConvLoading(false) }
   }
+
+  // Auto-scroll chat to bottom when messages update
+  useEffect(() => {
+    const el = convRef.current
+    if (!el) return
+    // slight delay to allow rendering
+    requestAnimationFrame(() => {
+      try { el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' }) } catch {}
+    })
+  }, [convMessages.length, convLoading])
 
   async function load() {
     setLoading(true);
@@ -300,7 +322,7 @@ export default function PatientDetailPage() {
                 ) : convMessages.length === 0 ? (
                   <div className="text-sm text-gray-500">No messages yet.</div>
                 ) : (
-                  <div className="space-y-2 max-h-[60vh] overflow-auto">
+                  <div ref={convRef} className="space-y-2 max-h-[60vh] overflow-auto">
                     {convMessages.map((m:any)=>{
                       let content: any = m.body
                       try {
@@ -373,8 +395,31 @@ export default function PatientDetailPage() {
                 ) : (
                   rxList.map((rx:any)=>(
                     <div key={rx.id} className="p-3 text-sm">
-                      <div className="font-medium">{rx.medicationName} {rx.strength ? `(${rx.strength})` : ''} {rx.form || ''}</div>
-                      <div className="text-xs text-gray-500">Start: {new Date(rx.startDate).toLocaleDateString()} {rx.endDate ? `• End: ${new Date(rx.endDate).toLocaleDateString()}` : ''}</div>
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="font-medium">{rx.medicationName} {rx.strength ? `(${rx.strength})` : ''} {rx.form || ''}</div>
+                          <div className="text-xs text-gray-500">Start: {new Date(rx.startDate).toLocaleDateString()} {rx.endDate ? `• End: ${new Date(rx.endDate).toLocaleDateString()}` : ''}</div>
+                        </div>
+                        <div className="flex gap-2">
+                          <button className="px-2 py-1 text-xs border rounded" onClick={()=>{
+                            setEditingRxId(rx.id);
+                            setEditName(rx.medicationName||'');
+                            setEditStrength(rx.strength||'');
+                            setEditForm(rx.form||'');
+                            setEditStart(rx.startDate ? String(rx.startDate).slice(0,10) : '');
+                            setEditEnd(rx.endDate ? String(rx.endDate).slice(0,10) : '');
+                          }}>Edit</button>
+                          <button className="px-2 py-1 text-xs border rounded hover:bg-red-50" onClick={async ()=>{
+                            if (!confirm('Delete this prescription?')) return;
+                            const res = await fetch(`/api/admin/prescriptions/${rx.id}`, { method:'DELETE' })
+                            const d = await res.json().catch(()=>({}));
+                            if (!res.ok) { show(d?.error || 'Failed', 'error'); return }
+                            // refresh list
+                            const list = await fetch(`/api/admin/patients/${detail.patient.id}/prescriptions`).then(r=>r.json()).catch(()=>({items:[]}))
+                            setRxList(list.items || [])
+                          }}>Delete</button>
+                        </div>
+                      </div>
                       <div className="mt-2">
                         <button className="px-2 py-1 text-xs border rounded" onClick={async ()=>{
                           const times = rxTimes.split(/\n+/).map(s=>s.trim()).filter(Boolean)
@@ -390,7 +435,8 @@ export default function PatientDetailPage() {
             <div className="border rounded p-3">
               <div className="text-sm font-medium mb-2">Add Prescription</div>
               <div className="space-y-2">
-                <input value={rxName} onChange={e=> setRxName(e.target.value)} className="border rounded px-3 py-2 w-full" placeholder="Medication name" />
+                <div className="text-xs text-gray-600">Enter the medication details. You can edit or delete later.</div>
+                <input value={rxName} onChange={e=> setRxName(e.target.value)} className="border rounded px-3 py-2 w-full" placeholder="Medication name (e.g., Amoxicillin)" />
                 <div className="grid grid-cols-2 gap-2">
                   <input value={rxStrength} onChange={e=> setRxStrength(e.target.value)} className="border rounded px-3 py-2 w-full" placeholder="Strength (e.g., 500mg)" />
                   <input value={rxForm} onChange={e=> setRxForm(e.target.value)} className="border rounded px-3 py-2 w-full" placeholder="Form (e.g., tablet)" />
@@ -399,21 +445,57 @@ export default function PatientDetailPage() {
                   <input type="date" value={rxStart} onChange={e=> setRxStart(e.target.value)} className="border rounded px-3 py-2 w-full" />
                   <input type="date" value={rxEnd} onChange={e=> setRxEnd(e.target.value)} className="border rounded px-3 py-2 w-full" />
                 </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <input value={rxCode} onChange={e=> setRxCode(e.target.value)} className="border rounded px-3 py-2 w-full" placeholder="Medication code (optional)" />
+                  <input value={rxSystem} onChange={e=> setRxSystem(e.target.value)} className="border rounded px-3 py-2 w-full" placeholder="Code system (e.g., RxNorm)" />
+                </div>
                 <label className="block text-xs font-medium">Reminder times (HH:MM per line)</label>
                 <textarea value={rxTimes} onChange={e=> setRxTimes(e.target.value)} className="border rounded w-full h-20 px-3 py-2 font-mono text-xs" />
                 <div className="flex items-center justify-end">
                   <button className="bg-blue-600 text-white px-3 py-2 rounded" onClick={async ()=>{
                     if (!detail?.patient?.id) return
                     if (!rxName.trim()) { show('Medication name required', 'error'); return }
-                    const res = await fetch(`/api/admin/patients/${detail.patient.id}/prescriptions`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ medicationName: rxName, strength: rxStrength || undefined, form: rxForm || undefined, startDate: rxStart || undefined, endDate: rxEnd || undefined }) })
+                    const res = await fetch(`/api/admin/patients/${detail.patient.id}/prescriptions`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ medicationName: rxName, strength: rxStrength || undefined, form: rxForm || undefined, startDate: rxStart || undefined, endDate: rxEnd || undefined, medicationCode: rxCode || undefined, medicationSystem: rxSystem || undefined }) })
                     const d = await res.json(); if (!res.ok) { show(d?.error || 'Failed', 'error'); return }
                     // refresh list
                     const list = await fetch(`/api/admin/patients/${detail.patient.id}/prescriptions`).then(r=>r.json()).catch(()=>({items:[]}))
                     setRxList(list.items || [])
-                    setRxName(''); setRxStrength(''); setRxForm(''); setRxStart(''); setRxEnd('')
+                    setRxName(''); setRxStrength(''); setRxForm(''); setRxStart(''); setRxEnd(''); setRxCode(''); setRxSystem('')
                   }}>Save</button>
                 </div>
               </div>
+              {editingRxId && (
+                <div className="mt-4 border-t pt-3">
+                  <div className="text-sm font-medium mb-2">Edit Prescription</div>
+                  <div className="space-y-2">
+                    <input value={editName} onChange={e=> setEditName(e.target.value)} className="border rounded px-3 py-2 w-full" placeholder="Medication name" />
+                    <div className="grid grid-cols-2 gap-2">
+                      <input value={editStrength} onChange={e=> setEditStrength(e.target.value)} className="border rounded px-3 py-2 w-full" placeholder="Strength" />
+                      <input value={editForm} onChange={e=> setEditForm(e.target.value)} className="border rounded px-3 py-2 w-full" placeholder="Form" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input type="date" value={editStart} onChange={e=> setEditStart(e.target.value)} className="border rounded px-3 py-2 w-full" />
+                      <input type="date" value={editEnd} onChange={e=> setEditEnd(e.target.value)} className="border rounded px-3 py-2 w-full" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input value={editCode} onChange={e=> setEditCode(e.target.value)} className="border rounded px-3 py-2 w-full" placeholder="Medication code" />
+                      <input value={editSystem} onChange={e=> setEditSystem(e.target.value)} className="border rounded px-3 py-2 w-full" placeholder="Code system" />
+                    </div>
+                    <div className="flex items-center justify-end gap-2">
+                      <button className="px-3 py-2 rounded border" onClick={()=> setEditingRxId(null)}>Cancel</button>
+                      <button className="px-3 py-2 rounded bg-teal-600 text-white" onClick={async ()=>{
+                        if (!editingRxId) return
+                        if (!editName.trim()) { show('Medication name required', 'error'); return }
+                        const res = await fetch(`/api/admin/prescriptions/${editingRxId}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ medicationName: editName, strength: editStrength || undefined, form: editForm || undefined, startDate: editStart || undefined, endDate: (editEnd || null), medicationCode: editCode || undefined, medicationSystem: editSystem || undefined }) })
+                        const d = await res.json(); if (!res.ok) { show(d?.error || 'Failed', 'error'); return }
+                        const list = await fetch(`/api/admin/patients/${detail!.patient.id}/prescriptions`).then(r=>r.json()).catch(()=>({items:[]}))
+                        setRxList(list.items || [])
+                        setEditingRxId(null)
+                      }}>Save Changes</button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </Tabs.Content>

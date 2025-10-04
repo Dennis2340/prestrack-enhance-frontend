@@ -30,6 +30,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const startDate = body.startDate ? new Date(body.startDate) : new Date()
     const endDate = body.endDate ? new Date(body.endDate) : null
     const timezone = typeof body.timezone === 'string' && body.timezone.trim() ? String(body.timezone).trim() : undefined
+    const medicationCode = typeof body.medicationCode === 'string' && body.medicationCode.trim() ? String(body.medicationCode).trim() : undefined
+    const medicationSystem = typeof body.medicationSystem === 'string' && body.medicationSystem.trim() ? String(body.medicationSystem).trim() : undefined
     if (!medicationName) return NextResponse.json({ error: 'medicationName required' }, { status: 400 })
 
     const created = await prisma.prescription.create({
@@ -41,6 +43,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         startDate,
         endDate: endDate || undefined,
         timezone: timezone || undefined,
+        medicationCode,
+        medicationSystem,
       },
       select: { id: true },
     })
