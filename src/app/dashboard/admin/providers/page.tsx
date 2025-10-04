@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { AppModal } from '@/components/ui/AppModal'
 
-type ProviderItem = { id: string; name: string | null; email: string | null; phoneE164: string | null; createdAt: string }
+type ProviderItem = { id: string; name: string | null; email: string | null; phoneE164: string | null; createdAt: string; canUpdateEscalations?: boolean; canCloseEscalations?: boolean }
 
 export default function ProvidersDashboardPage() {
   const [items, setItems] = useState<ProviderItem[]>([])
@@ -120,9 +120,10 @@ export default function ProvidersDashboardPage() {
               <div className="text-xs flex items-center gap-3 justify-end">
                 <div className="flex items-center gap-2">
                   <label className="text-xs text-gray-600">Escalation rights</label>
+                  {(() => { const currentValue = (p.canUpdateEscalations ? (p.canCloseEscalations ? 'close' : 'update') : 'none'); return (
                   <select
                     className="border rounded px-2 py-1 text-xs"
-                    defaultValue="none"
+                    defaultValue={currentValue}
                     onChange={async (e)=>{
                       const v = e.target.value
                       // Map select to flags and send a single update call (twice is ok if backend expects individual keys)
@@ -145,6 +146,7 @@ export default function ProvidersDashboardPage() {
                     <option value="update">Can update</option>
                     <option value="close">Can update & close</option>
                   </select>
+                  )})()}
                 </div>
 
                 <button

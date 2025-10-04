@@ -14,6 +14,9 @@ export async function GET() {
       email: u.email || null,
       phoneE164: u.providerProfile?.phoneE164 || null,
       createdAt: u.createdAt,
+      // Map existing columns to UI privilege flags
+      canUpdateEscalations: (u.providerProfile as any)?.notifyEscalation ?? false,
+      canCloseEscalations: (u.providerProfile as any)?.notifyMedication ?? false,
     }))
     return NextResponse.json({ items })
   } catch (e: any) {
