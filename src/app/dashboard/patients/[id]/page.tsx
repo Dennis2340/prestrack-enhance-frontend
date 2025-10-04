@@ -118,16 +118,17 @@ export default function PatientDetailPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ files: all.map((u) => ({ url: u })) }),
       });
-      const data = await resp.json();
+      type IngestResponse = { jobs?: Array<{ url: string; jobId: string }>; error?: string };
+      const data: IngestResponse = await resp.json();
       if (!resp.ok) throw new Error(data?.error || "Failed to enqueue");
 
       const now = new Date().toISOString();
-      const jobs: Array<{ url: string; jobId: string }> = (data.jobs || []) as Array<{ url: string; jobId: string }>;
-      const byUrl = new Map<string, string>(jobs.map((j) => [j.url, j.jobId]));
+      const jobs: Array<{ url: string; jobId: string }> = Array.isArray(data.jobs) ? data.jobs : [];
+      const byUrl = new Map<string, string>(jobs.map((j: { url: string; jobId: string }) => [j.url, j.jobId]));
       const next = [...sources];
       for (const u of all) {
         const existing = next.find((s) => s.url === u);
-        const jobId: string | null = byUrl.get(u) ?? null;
+        const jobId: string | null = (byUrl.get(u) as string | undefined) ?? null;
         if (existing) {
           existing.jobId = jobId;
           existing.addedAt = existing.addedAt || now;
