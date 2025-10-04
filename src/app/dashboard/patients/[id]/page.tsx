@@ -3,6 +3,7 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import * as Tabs from "@radix-ui/react-tabs";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useToast } from "@/components/ui/ToastContext";
 // Defer heavy client helpers to runtime to reduce compile-time memory pressure
 import { useParams } from "next/navigation";
 
@@ -60,7 +61,8 @@ export default function PatientDetailPage() {
   const [askA, setAskA] = useState("")
   const [asking, setAsking] = useState(false)
   // Outbound message
-  const [outMsg, setOutMsg] = useState("")
+  const [outMsg, setOutMsg] = useState("");
+  const { show } = useToast();
 
   const lsKey = useMemo(() => `patient_sources_${detail?.phoneE164 || "unknown"}`.replace(/[^a-zA-Z0-9_]/g, "_"), [detail?.phoneE164]);
 
@@ -163,7 +165,7 @@ export default function PatientDetailPage() {
       setUrls("");
       setOpen(false);
     } catch (e: any) {
-      alert(e?.message || "Failed");
+      show(e?.message || "Failed", "error");
     } finally {
       setProcessing(false);
     }
@@ -266,7 +268,7 @@ export default function PatientDetailPage() {
                     const d = await res.json(); if (!res.ok) throw new Error(d?.error || 'Failed')
                     setOutMsg("")
                     await load()
-                  } catch(e:any) { alert(e?.message || 'Failed') }
+                  } catch(e:any) { show(e?.message || 'Failed', 'error') }
                 }}>Send</button>
               </div>
               <div className="divide-y">
@@ -331,7 +333,7 @@ export default function PatientDetailPage() {
                         <button className="px-2 py-1 text-xs border rounded" onClick={async ()=>{
                           const times = rxTimes.split(/\n+/).map(s=>s.trim()).filter(Boolean)
                           const res = await fetch(`/api/admin/prescriptions/${rx.id}/reminders`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ days: 7, times }) })
-                          const d = await res.json(); if (!res.ok) alert(d?.error || 'Failed'); else alert(`Created ${d.created} reminders`)
+                          const d = await res.json(); if (!res.ok) show(d?.error || 'Failed', 'error'); else show(`Created ${d.created} reminders`, 'success')
                         }}>Create 7‑day reminders</button>
                       </div>
                     </div>
@@ -356,9 +358,9 @@ export default function PatientDetailPage() {
                 <div className="flex items-center justify-end">
                   <button className="bg-blue-600 text-white px-3 py-2 rounded" onClick={async ()=>{
                     if (!detail?.patient?.id) return
-                    if (!rxName.trim()) { alert('Medication name required'); return }
+                    if (!rxName.trim()) { show('Medication name required', 'error'); return }
                     const res = await fetch(`/api/admin/patients/${detail.patient.id}/prescriptions`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ medicationName: rxName, strength: rxStrength || undefined, form: rxForm || undefined, startDate: rxStart || undefined, endDate: rxEnd || undefined }) })
-                    const d = await res.json(); if (!res.ok) { alert(d?.error || 'Failed'); return }
+                    const d = await res.json(); if (!res.ok) { show(d?.error || 'Failed', 'error'); return }
                     // refresh list
                     const list = await fetch(`/api/admin/patients/${detail.patient.id}/prescriptions`).then(r=>r.json()).catch(()=>({items:[]}))
                     setRxList(list.items || [])
@@ -466,7 +468,7 @@ export default function PatientDetailPage() {
                   socialHistory: socialHistoryArr.map(s=>s.trim()).filter(Boolean),
                 }
                 const res = await fetch(`/api/admin/patients/${detail.patient.id}/medical`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ history: payload, notifyProviders: mhNotify }) })
-                const d = await res.json(); if (!res.ok) alert(d?.error || 'Failed');
+                const d = await res.json(); if (!res.ok) show(d?.error || 'Failed', 'error');
               }}>Save</button>
             </div>
           </div>
@@ -511,7 +513,7 @@ export default function PatientDetailPage() {
                     .filter(r => r.allergen),
                 }
                 const res = await fetch(`/api/admin/patients/${detail.patient.id}/allergies`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ allergies: payload, notifyProviders: allNotify }) })
-                const d = await res.json(); if (!res.ok) alert(d?.error || 'Failed');
+                const d = await res.json(); if (!res.ok) show(d?.error || 'Failed', 'error');
                 else setAllergiesList(payload)
               }}>Save</button>
             </div>
@@ -549,7 +551,7 @@ export default function PatientDetailPage() {
               <button className="bg-blue-600 text-white px-4 py-2 rounded" onClick={async () => {
                 if (!detail?.patient?.id) return
                 const res = await fetch(`/api/admin/patients/${detail.patient.id}/vitals`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ type: vitalType, value: vitalValue, units: vitalUnits, notifyProviders: vitalNotify }) })
-                const d = await res.json(); if (!res.ok) alert(d?.error || 'Failed');
+                const d = await res.json(); if (!res.ok) show(d?.error || 'Failed', 'error');
                 else {
                   setVitalType('bp'); setVitalValue(''); setVitalUnits('');
                   const list = await fetch(`/api/admin/patients/${detail.patient.id}/vitals`).then(r=>r.json()).catch(()=>({items:[]}))

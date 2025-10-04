@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from 'react'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 
 type VisitorItem = { id: string; name: string | null; phoneE164: string | null; createdAt: string }
 
@@ -12,6 +13,8 @@ export default function VisitorsPage() {
   const [messages, setMessages] = useState<any[]>([])
   const [convLoading, setConvLoading] = useState(false)
   const [reply, setReply] = useState('')
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
 
   async function load() {
     setLoading(true)
@@ -66,16 +69,7 @@ export default function VisitorsPage() {
                 <button
                   className="text-red-600 hover:underline disabled:opacity-50"
                   disabled={deletingId === v.id}
-                  onClick={async ()=>{
-                    if (!confirm('Delete this visitor and related conversations?')) return
-                    setDeletingId(v.id)
-                    try {
-                      const res = await fetch('/api/admin/visitors/delete', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id: v.id }) })
-                      const d = await res.json(); if (!res.ok) throw new Error(d?.error || 'Failed')
-                      await load()
-                    } catch(e:any) { alert(e?.message || 'Failed') }
-                    finally { setDeletingId(null) }
-                  }}
+                  onClick={()=>{ setPendingDeleteId(v.id); setConfirmOpen(true) }}
                 >Delete</button>
               </div>
             </div>
@@ -133,6 +127,31 @@ export default function VisitorsPage() {
           </div>
         </div>
       )}
+
+      {/* Confirm delete dialog */}
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title="Delete visitor?"
+        description="This will remove the visitor and related conversations. This action cannot be undone."
+        confirmLabel="Delete"
+        onConfirm={async ()=>{
+          const id = pendingDeleteId
+          if (!id) return
+          setDeletingId(id)
+          try {
+            const res = await fetch('/api/admin/visitors/delete', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id }) })
+            const d = await res.json(); if (!res.ok) throw new Error(d?.error || 'Failed')
+            await load()
+          } catch(e:any) {
+            // non-blocking failure path
+            console.error(e)
+          } finally {
+            setDeletingId(null)
+            setPendingDeleteId(null)
+          }
+        }}
+      />
     </div>
   )
 }

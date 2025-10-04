@@ -33,12 +33,14 @@ export function getRagSessionKey() {
 }
 
 function formatWhatsApp(text: string): string {
-  return String(text || "")
-    .replace(/\s+$/g, "")
-    .replace(/\n{3,}/g, "\n\n")
-    .replace(/^#+\s*/gm, "")
-    .replace(/\*{2,}/g, "*")
-    .trim();
+  let t = String(text || "");
+  t = t.replace(/\s+$/g, "");
+  t = t.replace(/\n{3,}/g, "\n\n");
+  t = t.replace(/^#+\s*/gm, "");
+  t = t.replace(/\*{2,}/g, "*");
+  // hard limit ~900 chars to keep under WhatsApp wall-of-text
+  if (t.length > 900) t = t.slice(0, 880) + "\n…";
+  return t.trim();
 }
 
 export async function agentRespond(opts: {
@@ -49,6 +51,14 @@ export async function agentRespond(opts: {
 }): Promise<AgentResponse> {
   const msg = String(opts.message || "").trim();
   const topK = Number(opts.topK ?? process.env.RAG_DEFAULT_TOPK ?? 5);
+
+  // If no message text (e.g., media-only), avoid RAG/LLM and return a friendly default
+  if (!msg) {
+    const answer = opts.whatsappStyle
+      ? formatWhatsApp("How can I help you today? If you sent a file, a provider will review it shortly.")
+      : "How can I help you today?";
+    return { answer, matches: [], billable: false };
+  }
 
   // Resolve scope: try patient by phone; if not found -> general RAG (works for visitors/unknown)
   const rawPhone = getAgentIncomingPhone();
@@ -80,9 +90,14 @@ export async function agentRespond(opts: {
   if (hasOpenAI) {
     try {
       const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-      const sys = `You are Prestrack, a helpful clinical assistant. Use the provided context snippets to answer. If unsure, say you don't know.`;
+      const sys = `You are Prestrack, a helpful clinical assistant answering over WhatsApp. Keep replies concise, readable, and actionable:
+- Limit to ~6 short lines.
+- Prefer short sentences and simple bullets.
+- Include only the most relevant facts from context.
+- If unsure, say you don't know.
+- Avoid long URLs unless essential.`;
       const context = results.slice(0, Math.max(1, Math.min(8, topK))).map((r, i) => `# Source ${i + 1}: ${r.title}${r.sourceUrl ? `\nURL: ${r.sourceUrl}` : ''}\n${r.text}`).join("\n\n");
-      const prompt = `Question: ${msg}\n\nContext:\n${context}\n\nAnswer:`;
+      const prompt = `User question:\n${msg}\n\nContext:\n${context}\n\nWrite a WhatsApp-friendly answer now:`;
       const completion = await client.chat.completions.create({
         model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
         temperature: 0.2,
