@@ -46,7 +46,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
               );
             })}
           </nav>
-          <div className="p-4 text-xs text-gray-500 border-t border-gray-200">AI & WhatsApp Healthcare</div>
+          <div className="p-4 text-xs text-gray-500 border-t border-gray-200">PresTrack • AI & WhatsApp Healthcare</div>
         </aside>
 
         {/* Main */}
@@ -56,7 +56,10 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             <div className="md:hidden">
               <span className="text-sm text-gray-500">Menu</span>
             </div>
-            <div className="font-medium">Care Platform</div>
+            <div className="flex items-center gap-2 font-semibold">
+              <img src="/health.png" alt="PresTrack" className="h-5 w-5" />
+              <span>PresTrack</span>
+            </div>
             <div className="text-sm text-gray-500">Admin</div>
           </div>
 
