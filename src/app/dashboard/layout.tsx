@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { ReactNode } from "react";
+import { cookies } from "next/headers";
+import { verifyJwt } from "@/lib/auth";
 import { LayoutGrid, Users, MessageSquare, Pill, AlertTriangle, Shield } from "lucide-react";
 
 // Simple cn util fallback if not present
@@ -7,7 +9,8 @@ function classNames(...classes: Array<string | false | undefined>) {
   return classes.filter(Boolean).join(" ");
 }
 
-const nav = [
+type NavItem = { href: string; label: string; icon: any }
+const NAV_ALL: NavItem[] = [
   { href: "/dashboard", label: "Overview", icon: LayoutGrid },
   { href: "/dashboard/patients", label: "Patients", icon: Users },
   { href: "/dashboard/visitors", label: "Visitors", icon: Users },
@@ -15,12 +18,19 @@ const nav = [
   { href: "/dashboard/medications", label: "Medications", icon: Pill },
   { href: "/dashboard/escalations", label: "Escalations", icon: AlertTriangle },
   { href: "/dashboard/admin", label: "Admin", icon: Shield },
-  // Admin utilities
   { href: "/dashboard/admin/providers", label: "Care Providers", icon: Users },
   { href: "/dashboard/admin/rag", label: "RAG Ingestion", icon: Shield },
-];
+]
 //and for a patient we can even send message to that patient directly, add it please and see the previous conversation between the patients, and the ai please, hope we are storing it there, hope u understand? let add this there please
-export default function DashboardLayout({ children }: { children: ReactNode }) {
+export default async function DashboardLayout({ children }: { children: ReactNode }) {
+  // Derive role from JWT in cookie (server component)
+  const cookieStore = await cookies()
+  const token = cookieStore.get("auth_token")?.value || ""
+  const payload = token ? verifyJwt<{ sub: string; role: "admin"|"provider"; email?: string | null }>(token) : null
+  const role: "admin" | "provider" = (payload?.role === "admin" || payload?.role === "provider") ? payload!.role : "provider"
+  const nav: NavItem[] = role === 'admin'
+    ? NAV_ALL
+    : NAV_ALL.filter(i => !i.href.startsWith('/dashboard/admin'))
   // usePathname is client-only; we can highlight links based on "startsWith" on server by comparing via string
   // Here we keep it simple: highlight using startsWith via window path isn't available server-side, leaving neutral styles
   return (
@@ -60,7 +70,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
               <img src="/health.png" alt="PresTrack" className="h-5 w-5" />
               <span>PresTrack</span>
             </div>
-            <div className="text-sm text-gray-500">Admin</div>
+            <div className="text-sm text-gray-500 capitalize">{role}</div>
           </div>
 
           <div className="p-4 md:p-6 lg:p-8">{children}</div>

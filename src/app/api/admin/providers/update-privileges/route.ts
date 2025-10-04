@@ -15,9 +15,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'forbidden' }, { status: 403 })
     }
 
+    // Map to existing columns to avoid schema errors
+    // - canUpdateEscalations -> notifyEscalation (boolean)
+    // - canCloseEscalations  -> notifyMedication (boolean) [reuse field as a second flag]
     const data: any = {}
-    if (typeof canUpdateEscalations === 'boolean') data.canUpdateEscalations = canUpdateEscalations
-    if (typeof canCloseEscalations === 'boolean') data.canCloseEscalations = canCloseEscalations
+    if (typeof canUpdateEscalations === 'boolean') data.notifyEscalation = canUpdateEscalations
+    if (typeof canCloseEscalations === 'boolean') data.notifyMedication = canCloseEscalations
     if (Object.keys(data).length === 0) return NextResponse.json({ error: 'no changes' }, { status: 400 })
 
     // Ensure a profile exists (upsert for resilience)

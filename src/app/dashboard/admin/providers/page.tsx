@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from 'react'
+import { AppModal } from '@/components/ui/AppModal'
 
 type ProviderItem = { id: string; name: string | null; email: string | null; phoneE164: string | null; createdAt: string }
 
@@ -18,6 +19,15 @@ export default function ProvidersDashboardPage() {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
   const [actionOpenId, setActionOpenId] = useState<string | null>(null)
   const [activeProvider, setActiveProvider] = useState<ProviderItem | null>(null)
+  const [modalOpen, setModalOpen] = useState(false)
+  const [modalText, setModalText] = useState('')
+  const [modalTitle, setModalTitle] = useState('Notice')
+
+  function show(msg: string, title = 'Notice') {
+    setModalTitle(title)
+    setModalText(msg)
+    setModalOpen(true)
+  }
 
   async function load() {
     setLoading(true)
@@ -47,7 +57,7 @@ export default function ProvidersDashboardPage() {
       if (!res.ok) throw new Error(data?.error || 'Failed to delete provider')
       await load()
     } catch (e: any) {
-      alert(e?.message || 'Delete failed')
+      show(e?.message || 'Delete failed', 'Error')
     } finally {
       setDeletingId(null)
       setConfirmDeleteId(null)
@@ -75,7 +85,7 @@ export default function ProvidersDashboardPage() {
       setPassword('')
       await load()
     } catch (e: any) {
-      alert(e?.message || 'Error')
+      show(e?.message || 'Error', 'Error')
     } finally {
       setSubmitting(false)
     }
@@ -86,7 +96,9 @@ export default function ProvidersDashboardPage() {
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-semibold">Care Providers</h1>
         <button onClick={() => setOpen(true)} className="bg-blue-600 text-white px-4 py-2 rounded">Add Care Provider</button>
-      </div>
+        {/* App-level modal for notices/errors */}
+      <AppModal open={modalOpen} onClose={()=> setModalOpen(false)} title={modalTitle}>{modalText}</AppModal>
+    </div>
 
       <div className="border rounded">
         <div className="grid grid-cols-4 text-xs font-medium uppercase text-gray-500 border-b px-3 py-2">
@@ -122,10 +134,10 @@ export default function ProvidersDashboardPage() {
                         const res = await fetch('/api/admin/providers/update-privileges', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) })
                         if (!res.ok) {
                           const d = await res.json().catch(()=>({}))
-                          alert(d?.error || `Failed (${res.status})`)
+                          show(d?.error || `Failed (${res.status})`, 'Error')
                         }
                       } catch (e:any) {
-                        alert(e?.message || 'Failed')
+                        show(e?.message || 'Failed', 'Error')
                       }
                     }}
                   >

@@ -14,8 +14,9 @@ export async function GET(req: NextRequest) {
       try {
         const prof = await prisma.providerProfile.findUnique({ where: { userId: auth.user.sub } as any })
         if (prof) {
-          canUpdate = (prof as any).canUpdateEscalations ?? true
-          canClose = (prof as any).canCloseEscalations ?? true
+          // Map to existing columns
+          canUpdate = (prof as any).notifyEscalation ?? true
+          canClose = (prof as any).notifyMedication ?? true
         }
       } catch {}
     }
