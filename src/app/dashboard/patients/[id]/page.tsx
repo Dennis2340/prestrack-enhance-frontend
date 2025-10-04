@@ -61,10 +61,29 @@ export default function PatientDetailPage() {
   const [askA, setAskA] = useState("")
   const [asking, setAsking] = useState(false)
   // Outbound message
-  const [outMsg, setOutMsg] = useState("");
+  const [outMsg, setOutMsg] = useState("")
   const { show } = useToast();
-
+  // Conversation thread (patient vs AI/provider)
+  const [convMessages, setConvMessages] = useState<any[]>([])
+  const [convLoading, setConvLoading] = useState(false)
   const lsKey = useMemo(() => `patient_sources_${detail?.phoneE164 || "unknown"}`.replace(/[^a-zA-Z0-9_]/g, "_"), [detail?.phoneE164]);
+
+  useEffect(() => {
+    if (!detail?.patient?.id) return;
+    loadConversation();
+  }, [detail?.patient?.id])
+
+  async function loadConversation() {
+    const pid = detail?.patient?.id || params.id
+    if (!pid) return
+    setConvLoading(true)
+    try {
+      const res = await fetch(`/api/admin/conversations/by-subject?subjectType=patient&subjectId=${encodeURIComponent(String(pid))}&take=50`, { cache: 'no-store' })
+      const data = await res.json();
+      if (res.ok) setConvMessages((Array.isArray(data.messages) ? data.messages : []).reverse())
+    } catch {}
+    finally { setConvLoading(false) }
+  }
 
   async function load() {
     setLoading(true);
@@ -258,7 +277,7 @@ export default function PatientDetailPage() {
         <Tabs.Content value="overview" className="mt-3">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="md:col-span-2 border rounded">
-              <div className="px-3 py-2 border-b text-sm font-medium">Recent Messages</div>
+              <div className="px-3 py-2 border-b text-sm font-medium">Conversation</div>
               <div className="p-3 flex gap-2 border-b items-center">
                 <input value={outMsg} onChange={e=> setOutMsg(e.target.value)} placeholder="Send a WhatsApp message to patient" className="flex-1 border rounded px-3 py-2 text-sm" />
                 <button className="px-3 py-2 rounded bg-teal-600 text-white text-sm" onClick={async ()=>{
@@ -267,20 +286,47 @@ export default function PatientDetailPage() {
                     const res = await fetch(`/api/admin/patients/${detail.patient.id}/message`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ body: outMsg }) })
                     const d = await res.json(); if (!res.ok) throw new Error(d?.error || 'Failed')
                     setOutMsg("")
-                    await load()
+                    // reload thread via by-subject API
+                    setConvLoading(true)
+                    const url = `/api/admin/conversations/by-subject?subjectType=patient&subjectId=${encodeURIComponent(detail.patient.id)}&take=50`
+                    const r2 = await fetch(url, { cache: 'no-store' }); const d2 = await r2.json(); if (r2.ok) setConvMessages((Array.isArray(d2.messages)?d2.messages:[]).reverse())
                   } catch(e:any) { show(e?.message || 'Failed', 'error') }
+                  finally { setConvLoading(false) }
                 }}>Send</button>
               </div>
-              <div className="divide-y">
-                {detail.messages.length === 0 ? (
-                  <div className="p-3 text-sm text-gray-500">No messages yet.</div>
+              <div className="p-3">
+                {convLoading ? (
+                  <div className="text-sm">Loading…</div>
+                ) : convMessages.length === 0 ? (
+                  <div className="text-sm text-gray-500">No messages yet.</div>
                 ) : (
-                  detail.messages.map((m) => (
-                    <div key={m.id} className="p-3 text-sm">
-                      <div className="text-xs text-gray-500 mb-1">{m.direction} via {m.via} · {new Date(m.createdAt).toLocaleString()}</div>
-                      <div className="whitespace-pre-wrap">{m.body}</div>
-                    </div>
-                  ))
+                  <div className="space-y-2 max-h-[60vh] overflow-auto">
+                    {convMessages.map((m:any)=>{
+                      let content: any = m.body
+                      try {
+                        if (typeof m.body === 'string' && m.body.trim().startsWith('{')) {
+                          const j = JSON.parse(m.body)
+                          if (j && j.kind === 'media') {
+                            const mime = String(j.mimetype || j.mimeType || 'application/octet-stream')
+                            if (j.url && /^image\//.test(mime)) content = (<img src={j.url} alt={j.filename || ''} className="max-h-60 rounded border" />)
+                            else if (j.url && /^audio\//.test(mime)) content = (<audio controls src={j.url} />)
+                            else if (j.url) content = (<a className="text-blue-600 underline" href={j.url} target="_blank" rel="noreferrer">Download file</a>)
+                            if (j.caption) content = (<div className="space-y-1"><div>{content}</div><div className="text-xs whitespace-pre-wrap">{j.caption}</div></div>)
+                          }
+                        }
+                      } catch {}
+                      const isOutbound = m.direction === 'outbound'
+                      const who = m.senderType === 'agent' ? 'Assistant' : (isOutbound ? 'Provider' : 'Patient')
+                      return (
+                        <div key={m.id} className={`flex ${isOutbound ? 'justify-end' : 'justify-start'}`}>
+                          <div className={`max-w-[85%] rounded px-3 py-2 text-sm whitespace-pre-wrap shadow ${isOutbound ? 'bg-blue-100 text-blue-900 border border-blue-200' : 'bg-white border'}`}>
+                            <div className="text-[10px] opacity-70 mb-1">{new Date(m.createdAt).toLocaleString()} • {who}</div>
+                            <div>{content}</div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
                 )}
               </div>
             </div>
@@ -577,7 +623,7 @@ export default function PatientDetailPage() {
           </div>
         </Tabs.Content>
         
-        <Tabs.Content value="ask" className="mt-3">
+        <Tabs.Content value="ask" className="mt-3" forceMount>
           <div className="border rounded p-3 space-y-3">
             <div className="text-base font-medium">Ask Prestrack</div>
             <div className="text-sm text-gray-600">Prestrack will use this patient's messages and records to answer concisely.</div>
@@ -616,11 +662,13 @@ export default function PatientDetailPage() {
                 }}
               >{asking ? 'Asking…' : 'Ask Prestrack'}</button>
             </div>
-            {askA ? (
-              <div className="bg-gray-50 rounded p-3 text-sm whitespace-pre-wrap">{askA}</div>
-            ) : (
-              <div className="text-xs text-gray-500">Answer will appear here.</div>
-            )}
+            <div className="min-h-24">
+              {askA ? (
+                <div className="bg-gray-50 rounded p-3 text-sm whitespace-pre-wrap">{askA}</div>
+              ) : (
+                <div className="text-xs text-gray-500">Answer will appear here.</div>
+              )}
+            </div>
           </div>
         </Tabs.Content>
       </Tabs.Root>

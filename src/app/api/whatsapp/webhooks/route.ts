@@ -185,11 +185,36 @@ export async function POST(req: Request) {
       }
     } catch {}
 
-    // Fully agentic reply
+    // Fully agentic reply (with short conversation history, last 3 messages)
     let final = ''
     try {
       setAgentIncomingPhone(phoneE164)
-      const { answer } = await agentRespond({ message: String(text || ''), whatsappStyle: true })
+
+      // Build conversation-aware history
+      let convoId: string | null = null
+      try {
+        if (isPatient && patientId) {
+          const c = await prisma.conversation.findFirst({ where: { subjectType: 'patient' as any, patientId }, orderBy: { updatedAt: 'desc' }, select: { id: true } })
+          convoId = c?.id || null
+        } else if (visitorId) {
+          const c = await prisma.conversation.findFirst({ where: { subjectType: 'visitor' as any, visitorId }, orderBy: { updatedAt: 'desc' }, select: { id: true } })
+          convoId = c?.id || null
+        }
+      } catch {}
+
+      let history: Array<{ role: 'user'|'assistant'|'system'; content: string }> = []
+      if (convoId) {
+        try {
+          const recent = await prisma.commMessage.findMany({ where: { conversationId: convoId }, orderBy: { createdAt: 'desc' }, take: 3 })
+          const ordered = [...recent].reverse()
+          history = ordered.map((m: any) => ({
+            role: m.senderType === 'agent' ? 'assistant' : (m.senderType === 'system' ? 'system' : 'user'),
+            content: String(m.body || ''),
+          }))
+        } catch {}
+      }
+
+      const { answer } = await agentRespond({ message: String(text || ''), whatsappStyle: true, history })
       final = answer || 'How can I help you today?'
     } finally {
       clearAgentIncomingPhone()
