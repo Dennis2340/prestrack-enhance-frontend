@@ -88,6 +88,16 @@ export async function POST(req: Request) {
       } catch {}
     })()
 
+    // If this request contains media, immediately reassure the user while background escalation runs.
+    try {
+      const mime = String(mediaObj?.mimetype || mediaObj?.mimeType || mediaObj?.contentType || '')
+      const isMedia = /^(audio|video|image|application)\//i.test(mime)
+      if (isMedia) {
+        const reassuring = `We\'ve received your file and sent it to a healthcare provider. Please hang on; you will be reached shortly.`
+        return NextResponse.json({ status: 'ok', answer: reassuring })
+      }
+    } catch {}
+
     // Identify subject and ensure visitor onboarding for unknown users
     let isPatient = false
     let patientId: string | null = null

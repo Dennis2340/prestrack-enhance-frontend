@@ -55,6 +55,12 @@ export default function PatientDetailPage() {
   const [rxStart, setRxStart] = useState("")
   const [rxEnd, setRxEnd] = useState("")
   const [rxTimes, setRxTimes] = useState<string>("09:00\n21:00")
+  // Ask Prestrack
+  const [askQ, setAskQ] = useState("")
+  const [askA, setAskA] = useState("")
+  const [asking, setAsking] = useState(false)
+  // Outbound message
+  const [outMsg, setOutMsg] = useState("")
 
   const lsKey = useMemo(() => `patient_sources_${detail?.phoneE164 || "unknown"}`.replace(/[^a-zA-Z0-9_]/g, "_"), [detail?.phoneE164]);
 
@@ -244,12 +250,25 @@ export default function PatientDetailPage() {
           <Tabs.Trigger value="allergies" className="px-3 py-2 text-sm border-b-2 data-[state=active]:border-blue-600">Allergies</Tabs.Trigger>
           <Tabs.Trigger value="vitals" className="px-3 py-2 text-sm border-b-2 data-[state=active]:border-blue-600">Vitals</Tabs.Trigger>
           <Tabs.Trigger value="prescriptions" className="px-3 py-2 text-sm border-b-2 data-[state=active]:border-blue-600">Prescriptions</Tabs.Trigger>
+          <Tabs.Trigger value="ask" className="px-3 py-2 text-sm border-b-2 data-[state=active]:border-blue-600">Ask Prestrack</Tabs.Trigger>
         </Tabs.List>
 
         <Tabs.Content value="overview" className="mt-3">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="md:col-span-2 border rounded">
               <div className="px-3 py-2 border-b text-sm font-medium">Recent Messages</div>
+              <div className="p-3 flex gap-2 border-b items-center">
+                <input value={outMsg} onChange={e=> setOutMsg(e.target.value)} placeholder="Send a WhatsApp message to patient" className="flex-1 border rounded px-3 py-2 text-sm" />
+                <button className="px-3 py-2 rounded bg-teal-600 text-white text-sm" onClick={async ()=>{
+                  if (!detail?.patient?.id || !outMsg.trim()) return
+                  try {
+                    const res = await fetch(`/api/admin/patients/${detail.patient.id}/message`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ body: outMsg }) })
+                    const d = await res.json(); if (!res.ok) throw new Error(d?.error || 'Failed')
+                    setOutMsg("")
+                    await load()
+                  } catch(e:any) { alert(e?.message || 'Failed') }
+                }}>Send</button>
+              </div>
               <div className="divide-y">
                 {detail.messages.length === 0 ? (
                   <div className="p-3 text-sm text-gray-500">No messages yet.</div>

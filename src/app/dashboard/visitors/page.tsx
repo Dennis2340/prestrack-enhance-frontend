@@ -7,6 +7,7 @@ type VisitorItem = { id: string; name: string | null; phoneE164: string | null; 
 export default function VisitorsPage() {
   const [items, setItems] = useState<VisitorItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   async function load() {
     setLoading(true)
@@ -48,7 +49,22 @@ export default function VisitorsPage() {
               <div>{v.name || '-'}</div>
               <div>{v.phoneE164 || '-'}</div>
               <div className="text-xs text-gray-500">{new Date(v.createdAt).toLocaleString()}</div>
-              <div className="text-xs text-gray-500">—</div>
+              <div className="text-xs">
+                <button
+                  className="text-red-600 hover:underline disabled:opacity-50"
+                  disabled={deletingId === v.id}
+                  onClick={async ()=>{
+                    if (!confirm('Delete this visitor and related conversations?')) return
+                    setDeletingId(v.id)
+                    try {
+                      const res = await fetch('/api/admin/visitors/delete', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id: v.id }) })
+                      const d = await res.json(); if (!res.ok) throw new Error(d?.error || 'Failed')
+                      await load()
+                    } catch(e:any) { alert(e?.message || 'Failed') }
+                    finally { setDeletingId(null) }
+                  }}
+                >Delete</button>
+              </div>
             </div>
           ))
         )}

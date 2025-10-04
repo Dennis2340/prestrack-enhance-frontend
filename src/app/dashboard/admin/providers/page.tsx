@@ -16,12 +16,6 @@ export default function ProvidersDashboardPage() {
   const [submitting, setSubmitting] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
-  // Provider Agent controls
-  const [paPatientPhone, setPaPatientPhone] = useState('')
-  const [paQuestion, setPaQuestion] = useState('')
-  const [paScope, setPaScope] = useState<'general'|'patient'>('general')
-  const [paSending, setPaSending] = useState(false)
-  const [paAnswer, setPaAnswer] = useState('')
 
   async function load() {
     setLoading(true)
@@ -109,7 +103,23 @@ export default function ProvidersDashboardPage() {
               <div>{p.name || '-'}</div>
               <div>{p.phoneE164 || '-'}</div>
               <div className="text-xs text-gray-500">{new Date(p.createdAt).toLocaleString()}</div>
-              <div className="text-xs">
+              <div className="text-xs space-x-3">
+                <label className="inline-flex items-center gap-1">
+                  <input type="checkbox" onChange={async (e)=>{
+                    try {
+                      await fetch('/api/admin/providers/update-privileges', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ userId: (p as any).userId, canUpdateEscalations: e.target.checked }) })
+                    } catch {}
+                  }} />
+                  <span>Can update</span>
+                </label>
+                <label className="inline-flex items-center gap-1">
+                  <input type="checkbox" onChange={async (e)=>{
+                    try {
+                      await fetch('/api/admin/providers/update-privileges', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ userId: (p as any).userId, canCloseEscalations: e.target.checked }) })
+                    } catch {}
+                  }} />
+                  <span>Can close</span>
+                </label>
                 <button onClick={() => setConfirmDeleteId(p.id)} disabled={deletingId === p.id} className="text-red-600 hover:underline disabled:opacity-50">
                   Delete
                 </button>
@@ -180,61 +190,7 @@ export default function ProvidersDashboardPage() {
         </div>
       )}
 
-      {/* Provider Agent */}
-      <div className="mt-8 space-y-6">
-        <div className="text-xl font-semibold">Provider Agent</div>
-
-        <div className="border rounded p-4 space-y-3">
-          <div className="text-sm font-medium">Request Patient Consent</div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-2 items-center">
-            <label className="text-sm text-gray-600">Patient phone (E.164)</label>
-            <input value={paPatientPhone} onChange={e=> setPaPatientPhone(e.target.value)} className="border rounded px-3 py-2 md:col-span-2" placeholder="+15551234567" />
-          </div>
-          <div className="flex items-center justify-end">
-            <button onClick={async ()=>{
-              if (!/^\+\d{6,15}$/.test(paPatientPhone)) { alert('Enter valid E.164 phone'); return }
-              setPaSending(true)
-              try {
-                const res = await fetch('/api/admin/provider-agent/request-consent', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ patientPhoneE164: paPatientPhone }) })
-                const data = await res.json(); if (!res.ok) throw new Error(data?.error || 'Failed')
-                alert('Consent request sent to patient on WhatsApp')
-              } catch(e:any) { alert(e?.message || 'Failed') }
-              finally { setPaSending(false) }
-            }} disabled={paSending} className="bg-blue-600 text-white px-4 py-2 rounded disabled:opacity-50">{paSending ? 'Sending…' : 'Send Consent Request'}</button>
-          </div>
-        </div>
-
-        <div className="border rounded p-4 space-y-3">
-          <div className="text-sm font-medium">Ask the Agent</div>
-          <div className="flex gap-4 text-sm">
-            <label className="inline-flex items-center gap-2"><input type="radio" checked={paScope==='general'} onChange={()=> setPaScope('general')} /> General</label>
-            <label className="inline-flex items-center gap-2"><input type="radio" checked={paScope==='patient'} onChange={()=> setPaScope('patient')} /> Patient-scoped</label>
-          </div>
-          {paScope==='patient' && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-2 items-center">
-              <label className="text-sm text-gray-600">Patient phone (E.164)</label>
-              <input value={paPatientPhone} onChange={e=> setPaPatientPhone(e.target.value)} className="border rounded px-3 py-2 md:col-span-2" placeholder="+15551234567" />
-            </div>
-          )}
-          <textarea value={paQuestion} onChange={e=> setPaQuestion(e.target.value)} className="border rounded w-full h-28 px-3 py-2" placeholder="Your question (e.g., summarize recent labs, or ask a guideline question)" />
-          <div className="flex items-center justify-end">
-            <button onClick={async ()=>{
-              if (!paQuestion.trim()) { alert('Enter a question'); return }
-              if (paScope==='patient' && !/^\+\d{6,15}$/.test(paPatientPhone)) { alert('Enter valid E.164 phone for patient-scoped questions'); return }
-              setPaSending(true); setPaAnswer('')
-              try {
-                const res = await fetch('/api/admin/provider-agent/ask', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ question: paQuestion, patientPhoneE164: paScope==='patient' ? paPatientPhone : undefined }) })
-                const data = await res.json(); if (!res.ok) throw new Error(data?.error || 'Failed')
-                setPaAnswer(String(data.answer || ''))
-              } catch(e:any) { alert(e?.message || 'Failed') }
-              finally { setPaSending(false) }
-            }} disabled={paSending} className="bg-green-600 text-white px-4 py-2 rounded disabled:opacity-50">{paSending ? 'Asking…' : 'Ask'}</button>
-          </div>
-          {paAnswer && (
-            <div className="bg-gray-50 rounded p-3 text-sm whitespace-pre-wrap">{paAnswer}</div>
-          )}
-        </div>
-      </div>
+      {/* Provider management only. Agent tools have been moved to the patient detail page. */}
     </div>
   )
 }

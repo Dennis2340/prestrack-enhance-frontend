@@ -11,7 +11,6 @@ const nav = [
   { href: "/dashboard", label: "Overview", icon: LayoutGrid },
   { href: "/dashboard/patients", label: "Patients", icon: Users },
   { href: "/dashboard/visitors", label: "Visitors", icon: Users },
-  { href: "/dashboard/conversations", label: "Conversations", icon: MessageSquare },
   { href: "/dashboard/test", label: "Test", icon: MessageSquare },
   { href: "/dashboard/medications", label: "Medications", icon: Pill },
   { href: "/dashboard/escalations", label: "Escalations", icon: AlertTriangle },
@@ -20,7 +19,7 @@ const nav = [
   { href: "/dashboard/admin/providers", label: "Care Providers", icon: Users },
   { href: "/dashboard/admin/rag", label: "RAG Ingestion", icon: Shield },
 ];
-
+//and for a patient we can even send message to that patient directly, add it please and see the previous conversation between the patients, and the ai please, hope we are storing it there, hope u understand? let add this there please
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   // usePathname is client-only; we can highlight links based on "startsWith" on server by comparing via string
   // Here we keep it simple: highlight using startsWith via window path isn't available server-side, leaving neutral styles

@@ -8,15 +8,8 @@ async function resolvePatientIdByPhone(phoneE164: string): Promise<string | null
   return cc?.patientId || null
 }
 
-async function hasGrantedConsent(patientId: string): Promise<boolean> {
-  const doc = await prisma.document.findFirst({
-    where: { patientId, typeCode: 'consent_access' },
-    orderBy: { updatedAt: 'desc' },
-    select: { metadata: true },
-  })
-  const meta: any = doc?.metadata || {}
-  return Boolean(meta.granted)
-}
+// Consent enforcement is disabled for authenticated admin/provider dashboard calls.
+// If a public endpoint is exposed in the future, add consent checks there.
 
 export async function POST(req: NextRequest) {
   const auth = requireAuth(req)
@@ -35,8 +28,6 @@ export async function POST(req: NextRequest) {
       }
       const pid = await resolvePatientIdByPhone(patientPhoneE164)
       if (!pid) return NextResponse.json({ error: 'patient not found for phone' }, { status: 404 })
-      const granted = await hasGrantedConsent(pid)
-      if (!granted) return NextResponse.json({ error: 'consent not granted by patient' }, { status: 403 })
       phoneCtx = patientPhoneE164
     }
 
