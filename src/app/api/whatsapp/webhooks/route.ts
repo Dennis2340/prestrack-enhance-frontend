@@ -117,7 +117,7 @@ export async function POST(req: Request) {
       const mime = String(mediaObj?.mimetype || mediaObj?.mimeType || mediaObj?.contentType || '')
       const isMedia = /^(audio|video|image|application)\//i.test(mime)
       if (isMedia) {
-        const reassuring = `We\'ve received your file and sent it to a healthcare provider. Please hang on; you will be reached shortly.`
+        const reassuring = `Thanks — your file was received. We will review it and follow up here shortly.`
         return NextResponse.json({ status: 'ok', answer: reassuring })
       }
     } catch {}
