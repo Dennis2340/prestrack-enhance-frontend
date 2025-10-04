@@ -98,12 +98,33 @@ export default function VisitorsPage() {
                   {messages.length === 0 ? (
                     <div className="p-3 text-sm text-gray-500">No messages</div>
                   ) : (
-                    messages.map((m:any) => (
-                      <div key={m.id} className="p-3 text-sm">
-                        <div className="text-xs text-gray-500 mb-1">{m.direction} via {m.via} · {new Date(m.createdAt).toLocaleString()}</div>
-                        <div className="whitespace-pre-wrap">{m.body}</div>
-                      </div>
-                    ))
+                    messages.map((m:any) => {
+                      let content: any = m.body
+                      try {
+                        if (typeof m.body === 'string' && m.body.trim().startsWith('{')) {
+                          const j = JSON.parse(m.body)
+                          if (j && j.kind === 'media') {
+                            const mime = String(j.mimetype || j.mimeType || 'application/octet-stream')
+                            if (j.url && /^image\//.test(mime)) {
+                              content = (<img src={j.url} alt={j.filename || ''} className="max-h-60 rounded border" />)
+                            } else if (j.url && /^audio\//.test(mime)) {
+                              content = (<audio controls src={j.url} />)
+                            } else if (j.url) {
+                              content = (<a className="text-blue-600 underline" href={j.url} target="_blank" rel="noreferrer">Download file</a>)
+                            }
+                            if (j.caption) {
+                              content = (<div className="space-y-1"><div>{content}</div><div className="text-xs whitespace-pre-wrap">{j.caption}</div></div>)
+                            }
+                          }
+                        }
+                      } catch {}
+                      return (
+                        <div key={m.id} className="p-3 text-sm">
+                          <div className="text-xs text-gray-500 mb-1">{m.direction} via {m.via} · {new Date(m.createdAt).toLocaleString()}</div>
+                          <div className="whitespace-pre-wrap">{content}</div>
+                        </div>
+                      )
+                    })
                   )}
                 </div>
               )}

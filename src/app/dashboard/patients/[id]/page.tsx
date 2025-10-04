@@ -576,7 +576,55 @@ export default function PatientDetailPage() {
             </div>
           </div>
         </Tabs.Content>
+        
+        <Tabs.Content value="ask" className="mt-3">
+          <div className="border rounded p-3 space-y-3">
+            <div className="text-base font-medium">Ask Prestrack</div>
+            <div className="text-sm text-gray-600">Prestrack will use this patient's messages and records to answer concisely.</div>
+            <div className="text-xs text-gray-500">Context phone: {detail?.phoneE164 ? (
+              <span>{detail.phoneE164}</span>
+            ) : (
+              <span className="text-red-600">not set — add a WhatsApp contact for this patient</span>
+            )}</div>
+            <textarea
+              value={askQ}
+              onChange={e=> setAskQ(e.target.value)}
+              className="border rounded w-full h-28 px-3 py-2"
+              placeholder="e.g., summarize recent vitals; any care tips?"
+            />
+            <div className="flex items-center justify-end gap-2">
+              <button className="px-3 py-2 rounded border" onClick={()=>{ setAskQ(''); setAskA('') }}>Clear</button>
+              <button
+                className="px-3 py-2 rounded bg-green-600 text-white disabled:opacity-50"
+                disabled={asking || !askQ.trim() || !detail?.phoneE164}
+                onClick={async ()=>{
+                  if (!askQ.trim() || !detail?.phoneE164) return;
+                  setAsking(true); setAskA('');
+                  try {
+                    const res = await fetch('/api/admin/provider-agent/ask', {
+                      method:'POST',
+                      headers:{'Content-Type':'application/json'},
+                      body: JSON.stringify({ question: askQ, patientPhoneE164: detail.phoneE164 })
+                    });
+                    const d = await res.json(); if (!res.ok) throw new Error(d?.error || 'Failed');
+                    setAskA(String(d.answer || ''));
+                  } catch(e:any) {
+                    show(e?.message || 'Failed', 'error');
+                  } finally {
+                    setAsking(false);
+                  }
+                }}
+              >{asking ? 'Asking…' : 'Ask Prestrack'}</button>
+            </div>
+            {askA ? (
+              <div className="bg-gray-50 rounded p-3 text-sm whitespace-pre-wrap">{askA}</div>
+            ) : (
+              <div className="text-xs text-gray-500">Answer will appear here.</div>
+            )}
+          </div>
+        </Tabs.Content>
       </Tabs.Root>
+
     </div>
-  );
+  )
 }

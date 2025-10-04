@@ -75,6 +75,31 @@ export async function POST(req: Request) {
           },
         })
 
+        // Log inbound media into the conversation as a JSON body so UI can render it
+        try {
+          const mediaJson = JSON.stringify({
+            kind: 'media',
+            mimetype: mime,
+            url: mediaObj?.url || mediaObj?.mediaUrl || null,
+            filename: mediaObj?.filename || null,
+            size: typeof mediaObj?.size === 'number' ? mediaObj.size : undefined,
+            caption: text || undefined,
+          })
+          if (subjectType === 'patient' && subjectId) {
+            let convo = await prisma.conversation.findFirst({ where: { patientId: subjectId, subjectType: 'patient' as any }, orderBy: { updatedAt: 'desc' } })
+            if (!convo) {
+              convo = await prisma.conversation.create({ data: { subjectType: 'patient' as any, patientId: subjectId, channel: 'whatsapp' as any, status: 'open' as any, lastMessageAt: new Date() } })
+            }
+            await prisma.commMessage.create({ data: { conversationId: convo.id, direction: 'inbound', via: 'whatsapp', body: mediaJson, senderType: 'patient' } })
+          } else if (subjectType === 'visitor' && subjectId) {
+            let convo = await prisma.conversation.findFirst({ where: { visitorId: subjectId, subjectType: 'visitor' as any }, orderBy: { updatedAt: 'desc' } })
+            if (!convo) {
+              convo = await prisma.conversation.create({ data: { subjectType: 'visitor' as any, visitorId: subjectId, channel: 'whatsapp' as any, status: 'open' as any, lastMessageAt: new Date() } })
+            }
+            await prisma.commMessage.create({ data: { conversationId: convo.id, direction: 'inbound', via: 'whatsapp', body: mediaJson, senderType: 'visitor' } })
+          }
+        } catch {}
+
         // Optionally: log a message row if a conversation exists
         try {
           if (subjectType === 'patient' && subjectId) {
@@ -169,6 +194,26 @@ export async function POST(req: Request) {
     } finally {
       clearAgentIncomingPhone()
     }
+
+    // Log agent reply to conversation so providers can review context
+    try {
+      if (final.trim()) {
+        if (isPatient && patientId) {
+          let convo = await prisma.conversation.findFirst({ where: { subjectType: 'patient' as any, patientId }, orderBy: { updatedAt: 'desc' } })
+          if (!convo) {
+            convo = await prisma.conversation.create({ data: { subjectType: 'patient' as any, patientId, channel: 'whatsapp' as any, status: 'open' as any, lastMessageAt: new Date() } })
+          }
+          await prisma.commMessage.create({ data: { conversationId: convo.id, direction: 'outbound', via: 'whatsapp', body: final, senderType: 'agent' } })
+        } else if (visitorId) {
+          let convo = await prisma.conversation.findFirst({ where: { subjectType: 'visitor' as any, visitorId }, orderBy: { updatedAt: 'desc' } })
+          if (!convo) {
+            convo = await prisma.conversation.create({ data: { subjectType: 'visitor' as any, visitorId, channel: 'whatsapp' as any, status: 'open' as any, lastMessageAt: new Date() } })
+          }
+          await prisma.commMessage.create({ data: { conversationId: convo.id, direction: 'outbound', via: 'whatsapp', body: final, senderType: 'agent' } })
+        }
+      }
+    } catch {}
+
     return NextResponse.json({ status: 'ok', answer: final })
   } catch (err: any) {
     console.error('[whatsapp webhook] error', err?.message || err)
