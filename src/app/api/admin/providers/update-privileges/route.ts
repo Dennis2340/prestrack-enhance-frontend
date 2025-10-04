@@ -9,12 +9,9 @@ export async function POST(req: NextRequest) {
     const { userId, canUpdateEscalations, canCloseEscalations } = await req.json().catch(()=>({})) as { userId?: string; canUpdateEscalations?: boolean; canCloseEscalations?: boolean }
     if (!userId) return NextResponse.json({ error: 'userId required' }, { status: 400 })
 
-    // Authorization: admins can update any provider. For local/testing, allow a provider
-    // to update their OWN profile when ALLOW_PROVIDER_PRIVILEGE_EDIT=true.
-    const allowSelfEdit = process.env.ALLOW_PROVIDER_PRIVILEGE_EDIT === 'true'
-    const isSelf = auth.user.sub === userId
-    const isAdmin = auth.user.role === 'admin'
-    if (!(isAdmin || (allowSelfEdit && isSelf))) {
+    // Authorization: any authenticated admin or provider can update escalation privileges.
+    // This unblocks provider-led management per requirements.
+    if (!(auth.user.role === 'admin' || auth.user.role === 'provider')) {
       return NextResponse.json({ error: 'forbidden' }, { status: 403 })
     }
 
