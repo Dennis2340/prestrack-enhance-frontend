@@ -16,6 +16,8 @@ export default function ProvidersDashboardPage() {
   const [submitting, setSubmitting] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  const [actionOpenId, setActionOpenId] = useState<string | null>(null)
+  const [activeProvider, setActiveProvider] = useState<ProviderItem | null>(null)
 
   async function load() {
     setLoading(true)
@@ -99,12 +101,12 @@ export default function ProvidersDashboardPage() {
           <div className="p-4 text-sm text-gray-600">No providers yet.</div>
         ) : (
           items.map((p) => (
-            <div key={p.id} className="grid grid-cols-4 items-center px-3 py-2 border-b last:border-b-0 text-sm">
+            <div key={p.id} className="relative grid grid-cols-4 items-center px-3 py-2 border-b last:border-b-0 text-sm">
               <div>{p.name || '-'}</div>
               <div>{p.phoneE164 || '-'}</div>
               <div className="text-xs text-gray-500">{new Date(p.createdAt).toLocaleString()}</div>
-              <div className="text-xs space-x-3">
-                <label className="inline-flex items-center gap-1">
+              <div className="text-xs flex items-center gap-3 justify-end">
+                <label className="hidden md:inline-flex items-center gap-1">
                   <input type="checkbox" onChange={async (e)=>{
                     try {
                       await fetch('/api/admin/providers/update-privileges', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ userId: (p as any).userId, canUpdateEscalations: e.target.checked }) })
@@ -112,7 +114,7 @@ export default function ProvidersDashboardPage() {
                   }} />
                   <span>Can update</span>
                 </label>
-                <label className="inline-flex items-center gap-1">
+                <label className="hidden md:inline-flex items-center gap-1">
                   <input type="checkbox" onChange={async (e)=>{
                     try {
                       await fetch('/api/admin/providers/update-privileges', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ userId: (p as any).userId, canCloseEscalations: e.target.checked }) })
@@ -120,9 +122,16 @@ export default function ProvidersDashboardPage() {
                   }} />
                   <span>Can close</span>
                 </label>
-                <button onClick={() => setConfirmDeleteId(p.id)} disabled={deletingId === p.id} className="text-red-600 hover:underline disabled:opacity-50">
-                  Delete
-                </button>
+                {/* Actions menu */}
+                <div className="relative">
+                  <button className="px-2 py-1 rounded border" onClick={()=> setActionOpenId(v => v === p.id ? null : p.id)}>⋮</button>
+                  {actionOpenId === p.id && (
+                    <div className="absolute right-0 mt-1 w-40 bg-white border rounded shadow z-10">
+                      <button className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50" onClick={()=>{ setActiveProvider(p); setActionOpenId(null) }}>View</button>
+                      <button className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50" onClick={()=>{ setConfirmDeleteId(p.id); setActionOpenId(null) }}>Delete</button>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           ))
@@ -191,6 +200,25 @@ export default function ProvidersDashboardPage() {
       )}
 
       {/* Provider management only. Agent tools have been moved to the patient detail page. */}
+
+      {/* View drawer */}
+      {activeProvider && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={()=> setActiveProvider(null)} />
+          <div className="relative bg-white w-full max-w-md rounded shadow-lg p-4">
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-lg font-semibold">Provider Details</h2>
+              <button onClick={()=> setActiveProvider(null)} className="text-gray-500">✕</button>
+            </div>
+            <div className="space-y-2 text-sm">
+              <div><span className="text-gray-500">Name:</span> {activeProvider.name || '-'}</div>
+              <div><span className="text-gray-500">Phone:</span> {activeProvider.phoneE164 || '-'}</div>
+              <div><span className="text-gray-500">Email:</span> {(activeProvider as any).email || '-'}</div>
+              <div><span className="text-gray-500">Created:</span> {new Date(activeProvider.createdAt).toLocaleString()}</div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
