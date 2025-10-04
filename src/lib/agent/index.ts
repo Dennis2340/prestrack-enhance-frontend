@@ -56,8 +56,11 @@ export async function agentRespond(opts: {
   let patientScopedPhone: string | undefined = undefined;
   try {
     if (phoneE164) {
-      const patient = await prisma.patient.findFirst({ where: { phoneE164: phoneE164 } });
-      if (patient) patientScopedPhone = phoneE164;
+      const cc = await prisma.contactChannel.findFirst({
+        where: { type: 'whatsapp', value: phoneE164, ownerType: 'patient' },
+        select: { id: true, patientId: true },
+      });
+      if (cc?.patientId) patientScopedPhone = phoneE164;
     }
   } catch (e:any) {
     console.error('[agent->scope] lookup error', e?.message || e);
