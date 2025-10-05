@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const patientId = String(params.id);
+    const patientId = String((await params).id);
     const body = await req.json().catch(() => ({}));
     const lmp = body?.lmp ? new Date(body.lmp) : null;
     const gravida = body?.gravida != null ? Number(body.gravida) : null;
