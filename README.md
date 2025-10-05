@@ -1,6 +1,3 @@
-Sure! Here's the complete markdown content without the extra string formatting — ready to be saved as a `README.md` file:
-
-```markdown
 # PresTrack Frontend
 
 A modern platform for managing pregnancy care, patient interactions, secure payments, and data insights — built with Next.js.
@@ -197,6 +194,27 @@ npm run dev
 
 This project is licensed under the MIT License.  
 See the [LICENSE](./LICENSE) file for details.
-```
+---
 
-Let me know if you’d like a downloadable version again once the tool is back online.
+## 🧩 ANC DAK Compliance + FHIR (MVP)
+
+This project includes a DAK-aligned ANC flow and minimal FHIR export.
+
+- **Codes/Value Sets**: LOINC for vitals/labs, standardized value sets in `src/lib/fhir/codes.ts`.
+- **Server rules**: IPTp/TT spacing and GA checks, vitals ranges, and first-contact baseline screens enforced in `src/app/api/admin/patients/[id]/anc/contact/route.ts`.
+- **Indicators**: `anc/indicators` exposes `lmp`, `edd`, last IPTp/TT dates, and screening flags for UI hints.
+- **FHIR export**: Read-only endpoints emit Encounter, Observation, Immunization, and a Bundle.
+- **Consent**: Per-channel consent (`ContactChannel.consent`) enforced for outbound WhatsApp.
+- **Audit**: System `CommMessage` entries on escalation creation/updates; audit listing API.
+
+Quick endpoints:
+- `GET /api/fhir/patients/{id}/encounters`
+- `GET /api/fhir/patients/{id}/observations`
+- `GET /api/fhir/patients/{id}/immunizations`
+- `GET /api/fhir/patients/{id}/bundle`
+- `GET /api/admin/patients/{id}/audit`
+
+Migration note:
+- Run Prisma migrate to add `ContactChannel.consent` (see `docs/DAK-FHIR.md`).
+
+Details and test checklist: see `docs/DAK-FHIR.md`.
