@@ -2,6 +2,106 @@ generator client {
   provider = "prisma-client-js"
 }
 
+// --- ANC DAK additions ---
+
+enum AdministrativeGender {
+  male
+  female
+  other
+  unknown
+}
+
+model Pregnancy {
+  id          String   @id @default(uuid())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  patientId   String
+  isActive    Boolean  @default(true)
+  // Core ANC DAK data elements
+  lmp         DateTime?
+  edd         DateTime?
+  gravida     Int?
+  para        Int?
+  riskFlags   Json?
+
+  patient     Patient  @relation(fields: [patientId], references: [id])
+  encounters  ANCEncounter[]
+  interventions ANCIntervention[]
+
+  @@index([patientId, isActive])
+}
+
+model ANCEncounter {
+  id           String   @id @default(uuid())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  pregnancyId  String
+  date         DateTime
+  location     String?
+  providerUserId String?
+
+  pregnancy    Pregnancy @relation(fields: [pregnancyId], references: [id])
+  observations ANCObservation[]
+
+  @@index([pregnancyId, date])
+}
+
+model ANCObservation {
+  id            String      @id @default(uuid())
+  createdAt     DateTime    @default(now())
+
+  encounterId   String
+  // Coding
+  codeSystem    String      // e.g., LOINC, SNOMED
+  code          String
+  // Values (one of)
+  valueQuantity Json?
+  valueCodeableConcept Json?
+  note          String?
+
+  encounter     ANCEncounter @relation(fields: [encounterId], references: [id])
+  @@index([encounterId])
+}
+
+enum ANCInterventionType {
+  iptp
+  iron_folate
+  calcium
+  deworming
+}
+
+model ANCIntervention {
+  id              String   @id @default(uuid())
+  createdAt       DateTime @default(now())
+
+  pregnancyId     String
+  type            ANCInterventionType
+  date            DateTime
+  medicationCode  String?
+  medicationSystem String?
+  doseText        String?
+
+  pregnancy       Pregnancy @relation(fields: [pregnancyId], references: [id])
+  @@index([pregnancyId, type, date])
+}
+
+// Immunization for TT
+model Immunization {
+  id                  String   @id @default(uuid())
+  createdAt           DateTime @default(now())
+
+  patientId           String
+  vaccineCode         String
+  vaccineSystem       String
+  occurrenceDateTime  DateTime
+  lotNumber           String?
+
+  patient             Patient  @relation(fields: [patientId], references: [id])
+  @@index([patientId, occurrenceDateTime])
+}
+
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
@@ -112,7 +212,8 @@ model Patient {
   firstName   String?
   lastName    String?
   dateOfBirth DateTime?
-  sex         String?  // FHIR: administrativeGender
+  sex         String?  // legacy UI field
+  administrativeGender AdministrativeGender? // FHIR: male|female|other|unknown
   externalId  String?  @unique
   identifiers Json?    // FHIR Identifier[] (system,value,use)
   address     Json?    // FHIR Address structure
@@ -125,6 +226,8 @@ model Patient {
   fhirLinks     FhirLink[]
   documents     Document[]
   tasks         Task[]
+  pregnancies   Pregnancy[]
+  immunizations Immunization[]
 }
 
 model Visitor {

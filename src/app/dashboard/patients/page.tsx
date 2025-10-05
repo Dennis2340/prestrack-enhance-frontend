@@ -193,8 +193,14 @@ export default function PatientsPage() {
                           <input value={addrCity} onChange={(e) => setAddrCity(e.target.value)} className="border rounded px-3 py-2 w-full" />
                         </div>
                         <div>
-                          <label className="block text-sm font-medium mb-1">State</label>
-                          <input value={addrState} onChange={(e) => setAddrState(e.target.value)} className="border rounded px-3 py-2 w-full" />
+                          <label className="block text-sm font-medium mb-1">Province</label>
+                          <select value={addrState} onChange={(e) => setAddrState(e.target.value)} className="border rounded px-3 py-2 w-full">
+                            <option value="">Select…</option>
+                            <option value="Western Area">Western Area</option>
+                            <option value="Northern Province">Northern Province</option>
+                            <option value="Southern Province">Southern Province</option>
+                            <option value="Eastern Province">Eastern Province</option>
+                          </select>
                         </div>
                       </div>
                       <div className="grid grid-cols-2 gap-3">

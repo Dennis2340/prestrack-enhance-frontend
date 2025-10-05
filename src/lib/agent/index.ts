@@ -191,6 +191,7 @@ DOMAIN AND SAFETY (MANDATORY):
         base,
         (providerScopedPhone ? providerStyle : patientStyle),
         safety,
+        `WHEN TO ESCALATE (MANDATORY):\nIf the user indicates ANC danger signs (any of: severe headache, blurred vision, heavy vaginal bleeding, severe abdominal pain, reduced fetal movements, fever ≥38°C, convulsions/seizure, severe shortness of breath, swelling of face/hands), set action='escalate' and include a short escalate_summary. Keep reply concise and reassuring.`,
         `OUTPUT FORMAT (MANDATORY):\nReturn a single JSON object with keys:\n- action: 'answer' | 'escalate' | 'onboard_name'\n- answer: string (message to send to the user, WhatsApp-friendly)\n- escalate_summary?: string (short summary if action is 'escalate')\n- name?: string (when action is 'onboard_name', the visitor name to save)\nExample:\n{"action":"answer","answer":"..."}`,
       ].join("\n\n");
 
@@ -200,6 +201,25 @@ DOMAIN AND SAFETY (MANDATORY):
       const personalBlock = pc ? (() => {
         const lines: string[] = [];
         if (pc.name) lines.push(`Name: ${pc.name}`);
+        if (pc.pregnancy) {
+          const p = pc.pregnancy;
+          const parts: string[] = [];
+          if (typeof p.gaWeeks === 'number') parts.push(`GA ~${p.gaWeeks} wks`);
+          if (p.edd) parts.push(`EDD ${new Date(p.edd).toLocaleDateString()}`);
+          if (p.lastContactDate) parts.push(`Last ANC ${new Date(p.lastContactDate).toLocaleDateString()}`);
+          if (p.lastIptpDate) parts.push(`IPTp on ${new Date(p.lastIptpDate).toLocaleDateString()}`);
+          if (p.lastTtDate) parts.push(`TT on ${new Date(p.lastTtDate).toLocaleDateString()}`);
+          if (parts.length) lines.push(`Pregnancy: ${parts.join(' • ')}`);
+          if (p.lastVitals) {
+            const v = p.lastVitals;
+            const vparts: string[] = [];
+            if (v.bp) vparts.push(`BP ${v.bp}`);
+            if (typeof v.weightKg === 'number') vparts.push(`Wt ${v.weightKg} kg`);
+            if (typeof v.fundalHeightCm === 'number') vparts.push(`FH ${v.fundalHeightCm} cm`);
+            if (typeof v.fhrBpm === 'number') vparts.push(`FHR ${v.fhrBpm} bpm`);
+            if (vparts.length) lines.push(`Recent vitals: ${vparts.join(' • ')}`);
+          }
+        }
         if (pc.prescriptions && pc.prescriptions.length) {
           const meds = pc.prescriptions.slice(0, 5).map(m => `${m.medicationName}${m.strength ? ` (${m.strength})` : ''}`).join(", ");
           if (meds) lines.push(`Active meds: ${meds}`);

@@ -18,6 +18,20 @@ export type PatientContext = {
     status: string
     medicationName?: string | null
   }>
+  pregnancy?: {
+    lmp?: string | null
+    edd?: string | null
+    gaWeeks?: number | null
+    lastContactDate?: string | null
+    lastIptpDate?: string | null
+    lastTtDate?: string | null
+    lastVitals?: {
+      bp?: string | null
+      weightKg?: number | null
+      fundalHeightCm?: number | null
+      fhrBpm?: number | null
+    } | null
+  } | null
 }
 
 // Simple in-memory cache (per process)
@@ -65,6 +79,71 @@ export async function fetchPatientContextByPhone(phoneE164: string): Promise<Pat
       select: { id: true, scheduledTime: true, status: true, prescription: { select: { medicationName: true } } },
     })
 
+    // Pregnancy summary (if any)
+    let pregBlock: PatientContext['pregnancy'] = null
+    try {
+      const db = prisma as any
+      const pregnancy = await db.pregnancy.findFirst({
+        where: { patientId, isActive: true },
+        select: { id: true, lmp: true, edd: true },
+      })
+      if (pregnancy) {
+        // Last ANC encounter
+        const lastEnc = await db.aNCEncounter.findFirst({
+          where: { pregnancyId: pregnancy.id },
+          orderBy: { date: 'desc' },
+          select: { id: true, date: true },
+        }) as any
+        // Last IPTp intervention
+        const lastIptp = await db.aNCIntervention.findFirst({
+          where: { pregnancyId: pregnancy.id, type: 'iptp' as any },
+          orderBy: { date: 'desc' },
+          select: { date: true },
+        }) as any
+        // Last TT immunization
+        const lastTt = await db.immunization.findFirst({
+          where: { patientId, vaccineCode: 'TT' },
+          orderBy: { occurrenceDateTime: 'desc' },
+          select: { occurrenceDateTime: true },
+        }) as any
+        // Latest vitals from latest encounter
+        let lastVitals: { bp?: string|null; weightKg?: number|null; fundalHeightCm?: number|null; fhrBpm?: number|null } | null = null
+        if (lastEnc?.id) {
+          const obs = await db.aNCObservation.findMany({
+            where: { encounterId: lastEnc.id },
+            select: { codeSystem: true, code: true, valueQuantity: true, valueCodeableConcept: true },
+          })
+          const getNum = (o:any) => typeof o?.valueQuantity?.value === 'number' ? o.valueQuantity.value : null
+          const byCode = (code:string) => obs.find(o=> o.code === code)
+          const bpObs = obs.find(o=> o.code === 'bp')
+          const wtObs = byCode('29463-7')
+          const fhObs = byCode('fundal-height')
+          const fhrObs = byCode('fhr')
+          lastVitals = {
+            bp: (bpObs?.valueCodeableConcept as any)?.text || null,
+            weightKg: getNum(wtObs),
+            fundalHeightCm: getNum(fhObs),
+            fhrBpm: getNum(fhrObs),
+          }
+        }
+        // GA weeks from LMP
+        let gaWeeks: number | null = null
+        if (pregnancy.lmp) {
+          const ms = Date.now() - new Date(pregnancy.lmp as any).getTime()
+          gaWeeks = Math.max(0, Math.round(ms / (7 * 24 * 60 * 60 * 1000)))
+        }
+        pregBlock = {
+          lmp: pregnancy.lmp ? new Date(pregnancy.lmp as any).toISOString() : null,
+          edd: pregnancy.edd ? new Date(pregnancy.edd as any).toISOString() : null,
+          gaWeeks,
+          lastContactDate: lastEnc?.date ? new Date(lastEnc.date).toISOString() : null,
+          lastIptpDate: lastIptp?.date ? new Date(lastIptp.date).toISOString() : null,
+          lastTtDate: lastTt?.occurrenceDateTime ? new Date(lastTt.occurrenceDateTime).toISOString() : null,
+          lastVitals,
+        }
+      }
+    } catch {}
+
     const data: PatientContext = {
       patientId,
       name: [patient?.firstName, patient?.lastName].filter(Boolean).join(' ') || null,
@@ -83,6 +162,7 @@ export async function fetchPatientContextByPhone(phoneE164: string): Promise<Pat
         status: u.status as any,
         medicationName: (u as any)?.prescription?.medicationName ?? null,
       })),
+      pregnancy: pregBlock,
     }
 
     CACHE.set(key, { at: now, data })

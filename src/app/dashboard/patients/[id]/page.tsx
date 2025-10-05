@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useToast } from "@/components/ui/ToastContext";
 // Defer heavy client helpers to runtime to reduce compile-time memory pressure
 import { useParams } from "next/navigation";
+import AncPanel from "@/components/patients/AncPanel";
 
 type Detail = {
   patient: { id: string; firstName: string | null; lastName: string | null; createdAt: string };
@@ -332,6 +333,7 @@ export default function PatientDetailPage() {
           <Tabs.Trigger value="allergies" className="px-3 py-2 text-sm border-b-2 data-[state=active]:border-blue-600">Allergies</Tabs.Trigger>
           <Tabs.Trigger value="vitals" className="px-3 py-2 text-sm border-b-2 data-[state=active]:border-blue-600">Vitals</Tabs.Trigger>
           <Tabs.Trigger value="prescriptions" className="px-3 py-2 text-sm border-b-2 data-[state=active]:border-blue-600">Prescriptions</Tabs.Trigger>
+          <Tabs.Trigger value="anc" className="px-3 py-2 text-sm border-b-2 data-[state=active]:border-blue-600">ANC</Tabs.Trigger>
           <Tabs.Trigger value="ask" className="px-3 py-2 text-sm border-b-2 data-[state=active]:border-blue-600">Ask Prestrack</Tabs.Trigger>
         </Tabs.List>
 
@@ -422,6 +424,14 @@ export default function PatientDetailPage() {
               </div>
             </div>
           </div>
+        </Tabs.Content>
+
+        <Tabs.Content value="anc" className="mt-3">
+          {detail?.patient?.id ? (
+            <AncPanel patientId={detail.patient.id} />
+          ) : (
+            <div className="text-sm text-gray-500">Loading patient…</div>
+          )}
         </Tabs.Content>
 
         <Tabs.Content value="prescriptions" className="mt-3">
