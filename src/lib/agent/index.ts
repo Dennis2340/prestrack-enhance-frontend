@@ -2,6 +2,7 @@
 
 import { ragSearch } from "./tools/rag";
 import OpenAI from "openai";
+import { createMedicalEscalation } from "./tools/medical";
 import prisma from "@/lib/prisma";
 
 export type AgentHistoryItem = { role: "user" | "assistant" | "system"; content: string };
@@ -128,9 +129,10 @@ DOMAIN AND SAFETY (MANDATORY):
         base,
         patientScopedPhone ? patientStyle : providerStyle,
         safety,
+        `\n\nOUTPUT FORMAT (MANDATORY):\nReturn a single JSON object with keys:\n- action: 'answer' | 'escalate'\n- answer: string (the message to send to the user, WhatsApp-friendly)\n- escalate_summary?: string (short summary if action is 'escalate')\nExample:\n{"action":"answer","answer":"..."}`,
       ].join("\n\n");
       const context = results.slice(0, Math.max(1, Math.min(8, topK))).map((r, i) => `# Source ${i + 1}: ${r.title}${r.sourceUrl ? `\nURL: ${r.sourceUrl}` : ''}\n${r.text}`).join("\n\n");
-      const prompt = `User question:\n${msg}\n\nContext:\n${context}\n\nWrite a WhatsApp-friendly answer now:`;
+      const prompt = `User question:\n${msg}\n\nContext (may be empty):\n${context}\n\nDecide if this needs urgent escalation. If yes, set action='escalate' and include a concise escalate_summary; otherwise action='answer'. Then output only the JSON.`;
       const completion = await client.chat.completions.create({
         model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
         temperature: 0.2,
@@ -140,8 +142,25 @@ DOMAIN AND SAFETY (MANDATORY):
           { role: 'user', content: prompt },
         ],
       });
-      answer = (completion.choices?.[0]?.message?.content || '').trim();
+      const raw = (completion.choices?.[0]?.message?.content || '').trim();
       billable = true;
+      // Parse tool-style JSON
+      let parsed: any = null;
+      try { parsed = JSON.parse(raw); } catch {}
+      if (parsed && typeof parsed === 'object' && typeof parsed.answer === 'string') {
+        const action = String(parsed.action || 'answer').toLowerCase();
+        answer = parsed.answer;
+        if (action === 'escalate' && patientScopedPhone) {
+          try {
+            await createMedicalEscalation({ phoneE164: patientScopedPhone, summary: String(parsed.escalate_summary || msg).slice(0,180), subjectType: 'patient', subjectId: null });
+            // Replace answer with a standard confirmation
+            answer = "I've alerted a healthcare provider right away. If this is a life‑threatening emergency, please call your local emergency number.";
+          } catch {}
+        }
+      } else {
+        // Fallback: use raw text as the answer
+        answer = raw;
+      }
     } catch (e: any) {
       console.error('[agent->openai] error', e?.message || e);
     }
