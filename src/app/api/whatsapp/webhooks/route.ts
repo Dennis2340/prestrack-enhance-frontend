@@ -184,6 +184,32 @@ export async function POST(req: Request) {
       }
     } catch {}
 
+    // Auto-escalate on emergency/provider-intent keywords for PATIENTS only
+    try {
+      const incomingText = String(text || '').trim().toLowerCase()
+      if (isPatient && patientId && incomingText) {
+        const intent = /(emergency|urgent|severe pain|chest pain|shortness of breath|can\s*i\s*speak\s*to\s*(a\s*)?(doctor|provider)|need\s*(a\s*)?(doctor|provider)|call\s*me|help\s*now)/i
+        if (intent.test(incomingText)) {
+          const summary = `Patient requested urgent help — ${incomingText.slice(0,180)}`
+          try {
+            await createMedicalEscalation({
+              phoneE164,
+              summary,
+              subjectType: 'patient',
+              subjectId: patientId,
+            })
+          } catch {}
+          // Log a system note into the conversation
+          try {
+            const convo = await prisma.conversation.findFirst({ where: { subjectType: 'patient' as any, patientId }, orderBy: { updatedAt: 'desc' } })
+            if (convo) await prisma.commMessage.create({ data: { conversationId: convo.id, direction: 'outbound', via: 'whatsapp', body: `[AUTO ESCALATION CREATED] ${summary}` , senderType: 'system' } })
+          } catch {}
+          const confirm = `I've alerted a healthcare provider right away. If this is a life‑threatening emergency, please call your local emergency number.`
+          return NextResponse.json({ status: 'ok', answer: confirm })
+        }
+      }
+    } catch {}
+
     // Fully agentic reply (with short conversation history, last 3 messages)
     let final = ''
     try {
