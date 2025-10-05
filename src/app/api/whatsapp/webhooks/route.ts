@@ -147,22 +147,7 @@ export async function POST(req: Request) {
       }
     } catch {}
 
-    // If visitor without a name, attempt to capture/confirm their name first
-    if (!isPatient && visitorId) {
-      const incoming = String(text || '').trim()
-      const looksLikeName = incoming && /^[A-Za-z\s.'-]{2,60}$/.test(incoming)
-      if (!visitorName) {
-        if (looksLikeName) {
-          try {
-            await prisma.visitor.update({ where: { id: visitorId }, data: { displayName: incoming } })
-          } catch {}
-          const greet = `Thanks, ${incoming}! How can I help you today?`
-          return NextResponse.json({ status: 'ok', answer: greet })
-        }
-        const promptName = `Welcome! I'm your clinic assistant. What's your name?`
-        return NextResponse.json({ status: 'ok', answer: promptName })
-      }
-    }
+    // Removed hardcoded visitor name prompt; onboarding is handled by the agent via tool when appropriate
 
     // Ensure conversation + log inbound text for analytics/history
     try {

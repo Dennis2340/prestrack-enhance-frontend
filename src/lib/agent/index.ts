@@ -129,10 +129,10 @@ DOMAIN AND SAFETY (MANDATORY):
         base,
         patientScopedPhone ? patientStyle : providerStyle,
         safety,
-        `\n\nOUTPUT FORMAT (MANDATORY):\nReturn a single JSON object with keys:\n- action: 'answer' | 'escalate'\n- answer: string (the message to send to the user, WhatsApp-friendly)\n- escalate_summary?: string (short summary if action is 'escalate')\nExample:\n{"action":"answer","answer":"..."}`,
+        `\n\nOUTPUT FORMAT (MANDATORY):\nReturn a single JSON object with keys:\n- action: 'answer' | 'escalate' | 'onboard_name'\n- answer: string (message to send to the user, WhatsApp-friendly)\n- escalate_summary?: string (short summary if action is 'escalate')\n- name?: string (when action is 'onboard_name', the visitor name to save)\nExample:\n{"action":"answer","answer":"..."}`,
       ].join("\n\n");
       const context = results.slice(0, Math.max(1, Math.min(8, topK))).map((r, i) => `# Source ${i + 1}: ${r.title}${r.sourceUrl ? `\nURL: ${r.sourceUrl}` : ''}\n${r.text}`).join("\n\n");
-      const prompt = `User question:\n${msg}\n\nContext (may be empty):\n${context}\n\nDecide if this needs urgent escalation. If yes, set action='escalate' and include a concise escalate_summary; otherwise action='answer'. Then output only the JSON.`;
+      const prompt = `User question:\n${msg}\n\nContext (may be empty):\n${context}\n\nDecide:\n- If urgent, use action='escalate' and include escalate_summary.\n- If the user provided their name or you can safely infer it (first name only is OK), you may set action='onboard_name' and include name.\n- Otherwise, use action='answer'.\nAlways include an 'answer' that responds helpfully to the user, even when escalating or onboarding.\nOutput only the JSON.`;
       const completion = await client.chat.completions.create({
         model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
         temperature: 0.2,
@@ -156,6 +156,21 @@ DOMAIN AND SAFETY (MANDATORY):
           } catch {}
           // Always send a human-friendly confirmation, do not expose JSON
           answer = "I've alerted a healthcare provider right away. If this is a life‑threatening emergency, please call your local emergency number.";
+        } else if (action === 'onboard_name') {
+          // For visitors (non-patient scope), set displayName using phone lookup
+          if (!patientScopedPhone) {
+            try {
+              const phone = getAgentIncomingPhone();
+              if (phone) {
+                const vis = await prisma.visitor.findFirst({ where: { contacts: { some: { type: 'whatsapp', value: phone } } }, select: { id: true } });
+                if (vis && typeof parsed.name === 'string' && parsed.name.trim()) {
+                  await prisma.visitor.update({ where: { id: vis.id }, data: { displayName: parsed.name.trim() } });
+                }
+              }
+            } catch {}
+          }
+          // Send the provided answer or a friendly default
+          answer = providedAnswer || "Thanks — noted. How can I help you today?";
         } else if (providedAnswer) {
           answer = providedAnswer;
         } else {
