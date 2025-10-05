@@ -112,9 +112,9 @@ export async function agentRespond(opts: {
     if (hasOpenAI) {
       try {
         const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-        const providerSys = `You are Prestrack assisting a healthcare provider over WhatsApp.\n\nSTYLE:\n- It is okay to be briefly conversational in the opening/closing (1 short line).\n- The factual content MUST be quoted directly from sources (no paraphrasing).\n\nSTRICT RULES:\n- Use ONLY the provided Sources. No external knowledge.\n- Present concise bullets of QUOTED lines/phrases from sources.\n- Each factual bullet must end with a citation like [S1], [S2].\n- If the sources do not contain the answer, reply: "No relevant lines in sources."\n- Do not simplify to layman terms.`
+        const providerSys = `You are Prestrack assisting a healthcare provider over WhatsApp.\n\nSTRUCTURE (MANDATORY):\n1) One short intro sentence addressing the provider (no claims).\n2) Quoted bullets of factual content from sources, each ending with a citation like [S1], [S2].\n3) One short closing sentence (e.g., availability of further details), no new claims.\n\nRULES:\n- Do NOT paraphrase factual content beyond direct quotes.\n- Use ONLY the provided Sources; no external knowledge.\n- No layman simplification; keep clinical phrasing as quoted.\n- If no relevant content, reply: "No relevant lines in sources."`
         const ctx = results.slice(0, Math.max(1, Math.min(8, topK))).map((r, i) => `# Source ${i + 1}: ${r.title}${r.sourceUrl ? `\nURL: ${r.sourceUrl}` : ''}\n${r.text}`).join("\n\n");
-        const providerPrompt = `Provider question:\n${msg}\n\nSources:\n${ctx}\n\nWrite a brief one-line intro, then quoted bullets with citations [S#], then a one-line closing if helpful.`;
+        const providerPrompt = `Provider question:\n${msg}\n\nSources:\n${ctx}\n\nFollow the STRUCTURE exactly: intro line, quoted bullets with [S#], closing line.`;
         const completion = await client.chat.completions.create({
           model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
           temperature: 0,
