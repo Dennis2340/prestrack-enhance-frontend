@@ -3,6 +3,7 @@
 import { ragSearch } from "./tools/rag";
 import OpenAI from "openai";
 import { createMedicalEscalation } from "./tools/medical";
+import { fetchPatientContextByPhone } from "./tools/patientContext";
 import prisma from "@/lib/prisma";
 
 export type AgentHistoryItem = { role: "user" | "assistant" | "system"; content: string };
@@ -61,10 +62,11 @@ export async function agentRespond(opts: {
     return { answer, matches: [], billable: false };
   }
 
-  // Resolve scope: try patient by phone; if not found -> general RAG (works for visitors/unknown)
+  // Resolve scope: try patient by phone; else provider by phone; else general
   const rawPhone = getAgentIncomingPhone();
   const phoneE164 = rawPhone && /^\+\d{6,15}$/.test(rawPhone) ? rawPhone : undefined;
   let patientScopedPhone: string | undefined = undefined;
+  let providerScopedPhone: string | undefined = undefined;
   try {
     if (phoneE164) {
       const cc = await prisma.contactChannel.findFirst({
@@ -72,12 +74,22 @@ export async function agentRespond(opts: {
         select: { id: true, patientId: true },
       });
       if (cc?.patientId) patientScopedPhone = phoneE164;
+      if (!patientScopedPhone) {
+        // Detect provider via providerProfile.phoneE164
+        const prov = await prisma.providerProfile.findFirst({ where: { phoneE164: phoneE164 as any }, select: { id: true } });
+        if (prov?.id) providerScopedPhone = phoneE164;
+      }
     }
   } catch (e:any) {
     console.error('[agent->scope] lookup error', e?.message || e);
   }
-  try { console.log(`[agent] scope=%s`, patientScopedPhone ? 'patient' : 'general') } catch {}
+  try { console.log(`[agent] scope=%s`, patientScopedPhone ? 'patient' : (providerScopedPhone ? 'provider' : 'general')) } catch {}
   const { results } = await ragSearch({ query: msg, topK, sessionKey: getRagSessionKey() || undefined, patientPhoneE164: patientScopedPhone });
+  // Fetch personal patient context for tailoring (patients only)
+  let personalContext: Awaited<ReturnType<typeof fetchPatientContextByPhone>> = null;
+  if (patientScopedPhone) {
+    try { personalContext = await fetchPatientContextByPhone(patientScopedPhone); } catch {}
+  }
 
   // Compose with OpenAI when configured
   let answer = "";
@@ -94,6 +106,50 @@ export async function agentRespond(opts: {
       results.length
     );
   } catch {}
+
+  // Provider technical mode: use LLM with strict quoting (no paraphrasing). Fallback to raw list if OpenAI unavailable.
+  if (providerScopedPhone) {
+    if (hasOpenAI) {
+      try {
+        const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+        const providerSys = `You are Prestrack assisting a healthcare provider. Answer using ONLY the provided Sources.\n\nSTRICT RULES:\n- Do NOT paraphrase beyond the source text.\n- Quote exact lines/phrases from sources.\n- Provide concise bullets, each ending with a citation like [S1], [S2].\n- If the sources do not contain the answer, say: "No relevant lines in sources."\n- Do not include layman simplifications.`
+        const ctx = results.slice(0, Math.max(1, Math.min(8, topK))).map((r, i) => `# Source ${i + 1}: ${r.title}${r.sourceUrl ? `\nURL: ${r.sourceUrl}` : ''}\n${r.text}`).join("\n\n");
+        const providerPrompt = `Provider question:\n${msg}\n\nSources:\n${ctx}\n\nWrite the answer as quoted bullets with citations [S#].`;
+        const completion = await client.chat.completions.create({
+          model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+          temperature: 0,
+          messages: [
+            { role: 'system', content: providerSys },
+            { role: 'user', content: providerPrompt },
+          ],
+        });
+        answer = (completion.choices?.[0]?.message?.content || '').trim();
+        if (!answer) answer = 'No relevant lines in sources.';
+        if (opts.whatsappStyle) answer = formatWhatsApp(answer);
+        return { answer, matches: results, billable: true };
+      } catch (e:any) {
+        // fall through to raw fallback
+      }
+    }
+    // Raw fallback
+    const top = results.slice(0, Math.max(1, Math.min(8, topK)));
+    if (top.length === 0) {
+      answer = 'No matching technical sources.';
+    } else {
+      const lines: string[] = [];
+      lines.push(`Results (${top.length}):`);
+      for (let i = 0; i < top.length; i++) {
+        const r = top[i];
+        const url = r.sourceUrl ? ` — ${r.sourceUrl}` : '';
+        lines.push(`${i + 1}. ${r.title}${url}`);
+        const snippet = (r.text || '').slice(0, 400).trim();
+        if (snippet) lines.push(snippet);
+      }
+      answer = lines.join('\n');
+    }
+    if (opts.whatsappStyle) answer = formatWhatsApp(answer);
+    return { answer, matches: results, billable: false };
+  }
 
   if (hasOpenAI) {
     try {
@@ -121,17 +177,33 @@ TONE AND STYLE FOR PROVIDERS/GENERAL:
       const safety = `
 DOMAIN AND SAFETY (MANDATORY):
 - Only answer health/clinical questions. If the topic is unrelated to health, ask the user to provide a health-related question.
-- Do not fabricate specific patient details or records. Avoid firm diagnosis; provide general guidance and when to seek care.
 - If unsure, say you don't know.
 `;
 
       const sys = [
         base,
-        patientScopedPhone ? patientStyle : providerStyle,
+        (providerScopedPhone ? providerStyle : patientStyle),
         safety,
-        `\n\nOUTPUT FORMAT (MANDATORY):\nReturn a single JSON object with keys:\n- action: 'answer' | 'escalate' | 'onboard_name'\n- answer: string (message to send to the user, WhatsApp-friendly)\n- escalate_summary?: string (short summary if action is 'escalate')\n- name?: string (when action is 'onboard_name', the visitor name to save)\nExample:\n{"action":"answer","answer":"..."}`,
+        `OUTPUT FORMAT (MANDATORY):\nReturn a single JSON object with keys:\n- action: 'answer' | 'escalate' | 'onboard_name'\n- answer: string (message to send to the user, WhatsApp-friendly)\n- escalate_summary?: string (short summary if action is 'escalate')\n- name?: string (when action is 'onboard_name', the visitor name to save)\nExample:\n{"action":"answer","answer":"..."}`,
       ].join("\n\n");
-      const context = results.slice(0, Math.max(1, Math.min(8, topK))).map((r, i) => `# Source ${i + 1}: ${r.title}${r.sourceUrl ? `\nURL: ${r.sourceUrl}` : ''}\n${r.text}`).join("\n\n");
+
+      const ragBlock = results.slice(0, Math.max(1, Math.min(8, topK))).map((r, i) => `# Source ${i + 1}: ${r.title}${r.sourceUrl ? `\nURL: ${r.sourceUrl}` : ''}\n${r.text}`).join("\n\n");
+      // Build a concise Personal Context section if available
+      const pc = personalContext;
+      const personalBlock = pc ? (() => {
+        const lines: string[] = [];
+        if (pc.name) lines.push(`Name: ${pc.name}`);
+        if (pc.prescriptions && pc.prescriptions.length) {
+          const meds = pc.prescriptions.slice(0, 5).map(m => `${m.medicationName}${m.strength ? ` (${m.strength})` : ''}`).join(", ");
+          if (meds) lines.push(`Active meds: ${meds}`);
+        }
+        if (pc.upcomingReminders && pc.upcomingReminders.length) {
+          const next = pc.upcomingReminders[0];
+          lines.push(`Next reminder: ${new Date(next.when).toLocaleString()}${next.medicationName ? ` for ${next.medicationName}` : ''}`);
+        }
+        return lines.length ? `Personal Context:\n${lines.join('\n')}` : '';
+      })() : '';
+      const context = [personalBlock, ragBlock].filter(Boolean).join("\n\n");
       const prompt = `User question:\n${msg}\n\nContext (may be empty):\n${context}\n\nDecide:\n- If urgent, use action='escalate' and include escalate_summary.\n- If the user provided their name or you can safely infer it (first name only is OK), you may set action='onboard_name' and include name.\n- Otherwise, use action='answer'.\nAlways include an 'answer' that responds helpfully to the user, even when escalating or onboarding.\nOutput only the JSON.`;
       const completion = await client.chat.completions.create({
         model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
