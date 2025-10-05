@@ -147,19 +147,28 @@ DOMAIN AND SAFETY (MANDATORY):
       // Parse tool-style JSON
       let parsed: any = null;
       try { parsed = JSON.parse(raw); } catch {}
-      if (parsed && typeof parsed === 'object' && typeof parsed.answer === 'string') {
+      if (parsed && typeof parsed === 'object') {
         const action = String(parsed.action || 'answer').toLowerCase();
-        answer = parsed.answer;
+        const providedAnswer = typeof parsed.answer === 'string' ? parsed.answer : '';
         if (action === 'escalate' && patientScopedPhone) {
           try {
             await createMedicalEscalation({ phoneE164: patientScopedPhone, summary: String(parsed.escalate_summary || msg).slice(0,180), subjectType: 'patient', subjectId: null });
-            // Replace answer with a standard confirmation
-            answer = "I've alerted a healthcare provider right away. If this is a life‑threatening emergency, please call your local emergency number.";
           } catch {}
+          // Always send a human-friendly confirmation, do not expose JSON
+          answer = "I've alerted a healthcare provider right away. If this is a life‑threatening emergency, please call your local emergency number.";
+        } else if (providedAnswer) {
+          answer = providedAnswer;
+        } else {
+          // Safe default if the model omitted 'answer'
+          answer = "Thanks — I’ve noted your request. A provider will review and follow up here shortly.";
         }
       } else {
-        // Fallback: use raw text as the answer
-        answer = raw;
+        // Fallback: if raw looks like JSON, hide it behind a friendly line
+        if (/^\s*\{[\s\S]*\}\s*$/.test(raw)) {
+          answer = "Thanks — I’ve noted your request. A provider will review and follow up here shortly.";
+        } else {
+          answer = raw;
+        }
       }
     } catch (e: any) {
       console.error('[agent->openai] error', e?.message || e);
