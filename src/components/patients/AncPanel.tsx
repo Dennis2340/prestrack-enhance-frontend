@@ -36,7 +36,18 @@ export default function AncPanel({ patientId }: { patientId: string }) {
   });
 
   // Indicators
-  const [ind, setInd] = useState<{ encountersCount?: number; iptpCount?: number; ttCount?: number; lastHb?: number|null; lastHbAt?: string|null } | null>(null);
+  const [ind, setInd] = useState<{
+    encountersCount?: number;
+    iptpCount?: number;
+    ttCount?: number;
+    lastHb?: number | null;
+    lastHbAt?: string | null;
+    lastIptpDate?: string | null;
+    lastTtDate?: string | null;
+    lmp?: string | null;
+    edd?: string | null;
+    screening?: { hiv?: boolean; syphilis?: boolean; malariaRdt?: boolean };
+  } | null>(null);
   // Local modal for confirmations/errors
   const [modal, setModal] = useState<{ open: boolean; title: string; message: string; kind: 'success' | 'error' }>({ open: false, title: '', message: '', kind: 'success' });
   function show(kind: 'success'|'error', title: string, message: string) {
@@ -46,6 +57,9 @@ export default function AncPanel({ patientId }: { patientId: string }) {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [details, setDetails] = useState<any | null>(null);
+  // UI warnings for schedule checks
+  const [iptpWarn, setIptpWarn] = useState<string | null>(null);
+  const [ttWarn, setTtWarn] = useState<string | null>(null);
   async function openDetails() {
     if (!patientId) return;
     setDetailsOpen(true);
@@ -73,6 +87,44 @@ export default function AncPanel({ patientId }: { patientId: string }) {
     if (patientId) load();
     return () => { cancelled = true };
   }, [patientId]);
+
+  // Compute non-blocking warnings when inputs/indicators change
+  useEffect(() => {
+    try {
+      setIptpWarn(null); setTtWarn(null);
+      if (!ind) return;
+      if (!encDate) return;
+      const enc = new Date(encDate);
+      if (iptp === 'given') {
+        // GA from LMP or EDD
+        const lmp = ind.lmp ? new Date(ind.lmp) : null;
+        const edd = ind.edd ? new Date(ind.edd) : null;
+        let gaWeeks: number | null = null;
+        if (lmp) {
+          gaWeeks = Math.floor((enc.getTime() - lmp.getTime()) / (7*24*60*60*1000));
+        } else if (edd) {
+          const daysToEdd = Math.floor((edd.getTime() - enc.getTime()) / (24*60*60*1000));
+          gaWeeks = 40 - Math.floor(daysToEdd/7);
+        }
+        const msgs: string[] = [];
+        if (gaWeeks != null && gaWeeks < 13) msgs.push('IPTp typically starts from ~13 weeks GA.');
+        if (ind.lastIptpDate) {
+          const last = new Date(ind.lastIptpDate);
+          const diffDays = Math.floor((enc.getTime() - last.getTime())/(24*60*60*1000));
+          if (diffDays < 28) msgs.push('Last IPTp was < 4 weeks ago.');
+        }
+        setIptpWarn(msgs.length ? msgs.join(' ') : null);
+      }
+      if (tt === 'given') {
+        if (ind.lastTtDate) {
+          const last = new Date(ind.lastTtDate);
+          const enc = new Date(encDate);
+          const diffDays = Math.floor((enc.getTime() - last.getTime())/(24*60*60*1000));
+          if (diffDays < 28) setTtWarn('Last TT dose was < 4 weeks ago.');
+        }
+      }
+    } catch {}
+  }, [ind, encDate, iptp, tt]);
 
   async function submitIntake(e: React.FormEvent) {
     e.preventDefault();
@@ -310,6 +362,9 @@ export default function AncPanel({ patientId }: { patientId: string }) {
                   </label>
                 ))}
               </div>
+            </div>
+            <div>
+              {tt === 'given' && ttWarn && <div className="mb-2 text-xs text-amber-700">{ttWarn}</div>}
             </div>
             <div className="flex items-center justify-end">
               <button type="submit" disabled={savingContact} className="bg-teal-600 text-white px-3 py-2 rounded disabled:opacity-50">{savingContact ? "Saving…" : "Save Contact"}</button>

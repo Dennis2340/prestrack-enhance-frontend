@@ -3,6 +3,9 @@
 export const LOINC = {
   BODY_WEIGHT: "29463-7", // Body weight
   HEMOGLOBIN: "718-7", // Hemoglobin [Mass/volume] in Blood
+  SYSTOLIC_BP: "8480-6", // Systolic blood pressure
+  DIASTOLIC_BP: "8462-4", // Diastolic blood pressure
+  HEART_RATE: "8867-4", // Heart rate (used for fetal heart rate capture)
 };
 
 export const LOCAL = {
@@ -18,6 +21,7 @@ export const UNITS = {
   KG: "kg",
   CM: "cm",
   BPM: "bpm",
+  MM_HG: "mm[Hg]",
 };
 
 export const MEDS = {
@@ -38,3 +42,10 @@ export const DANGER_SIGNS = [
   "reduced_fetal_movements",
   "fever",
 ] as const;
+
+// Value sets for common ANC labs/screens (DAK-aligned simplifications)
+export const VALUE_SETS = {
+  HIV_RESULT: ["positive", "negative", "invalid", "unknown"] as const,
+  SYPHILIS_RESULT: ["positive", "negative", "invalid", "unknown"] as const,
+  MALARIA_RDT: ["positive", "negative", "invalid", "unknown"] as const,
+};

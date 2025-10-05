@@ -39,6 +39,19 @@ export async function POST(req: NextRequest) {
 
     await prisma.document.update({ where: { id }, data: { metadata: meta } })
 
+    // Audit: record a system message in the patient's conversation
+    try {
+      const docAfter = await prisma.document.findUnique({ where: { id }, select: { patientId: true } })
+      if (docAfter?.patientId) {
+        let convo = await prisma.conversation.findFirst({ where: { subjectType: 'patient' as any, patientId: docAfter.patientId }, orderBy: { updatedAt: 'desc' } })
+        if (!convo) {
+          convo = await prisma.conversation.create({ data: { subjectType: 'patient' as any, patientId: docAfter.patientId, channel: 'whatsapp' as any, status: 'open' as any, lastMessageAt: new Date() } })
+        }
+        const msgBody = `Escalation ${id} updated${status ? ` — status: ${status}` : ''}${note ? `\nNote: ${String(note).slice(0,180)}` : ''}`
+        await prisma.commMessage.create({ data: { conversationId: (convo as any).id, direction: 'outbound', via: 'whatsapp', body: msgBody, senderType: 'system' } as any })
+      }
+    } catch {}
+
     // Notify all providers of the update to avoid duplicate work
     try {
       const providers = await prisma.providerProfile.findMany({ where: { phoneE164: { not: null } }, select: { phoneE164: true } })

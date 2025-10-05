@@ -4,7 +4,7 @@ import { requireAuth } from '@/lib/withAuth'
 import { sendWhatsAppViaGateway } from '@/lib/whatsapp'
 
 async function resolveVisitorWhatsapp(visitorId: string): Promise<string | null> {
-  const cc = await prisma.contactChannel.findFirst({ where: { ownerType: 'visitor', visitorId, type: 'whatsapp' }, orderBy: { preferred: 'desc' }, select: { value: true } })
+  const cc = await (prisma as any).contactChannel.findFirst({ where: { ownerType: 'visitor', visitorId, type: 'whatsapp', consent: true }, orderBy: { preferred: 'desc' }, select: { value: true } })
   return cc?.value || null
 }
 

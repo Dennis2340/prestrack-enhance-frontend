@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { VALUE_SETS, DANGER_SIGNS } from "@/lib/fhir/codes";
 
 export const ancIntakeSchema = z.object({
   lmp: z.string().date().optional().or(z.literal("")).optional(),
@@ -36,4 +37,13 @@ export const ancContactSchema = z.object({
   observations: z.array(observationSchema).optional().default([]),
   interventions: z.array(interventionSchema).optional().default([]),
   immunizations: z.array(immunizationSchema).optional().default([]),
+  // Labs/screens (optional, validated when provided)
+  hivResult: z.enum([...VALUE_SETS.HIV_RESULT] as [string, ...string[]]).optional(),
+  syphilisResult: z.enum([...VALUE_SETS.SYPHILIS_RESULT] as [string, ...string[]]).optional(),
+  hb: z
+    .preprocess((v) => (v === "" || v == null ? undefined : v), z.coerce.number().gte(3).lte(25))
+    .optional(),
+  malariaRdt: z.enum([...VALUE_SETS.MALARIA_RDT] as [string, ...string[]]).optional(),
+  // Danger signs (optional list of known keys)
+  dangerSigns: z.array(z.enum([...DANGER_SIGNS] as [string, ...string[]])).optional().default([]),
 });

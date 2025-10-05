@@ -76,5 +76,14 @@ export async function createMedicalEscalation(input: MedicalEscalationInput) {
   const body = `${header}: ${who}\n${input.summary || 'Media received'}`
   await Promise.allSettled(providers.map(p => p.phoneE164 ? sendWhatsAppViaGateway({ toE164: p.phoneE164, body }) : Promise.resolve()))
 
+  // Audit log: record a system message in patient's conversation
+  try {
+    let convo = await prisma.conversation.findFirst({ where: { subjectType: 'patient' as any, patientId: patientIdForDoc }, orderBy: { updatedAt: 'desc' } })
+    if (!convo) {
+      convo = await prisma.conversation.create({ data: { subjectType: 'patient' as any, patientId: patientIdForDoc!, channel: 'whatsapp' as any, status: 'open' as any, lastMessageAt: new Date() } })
+    }
+    await prisma.commMessage.create({ data: { conversationId: (convo as any).id, direction: 'outbound', via: 'whatsapp', body: `System escalation created (Document ${doc.id})`, senderType: 'system' } as any })
+  } catch {}
+
   return { id: doc.id }
 }
