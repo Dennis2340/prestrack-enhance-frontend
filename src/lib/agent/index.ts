@@ -109,12 +109,19 @@ export async function agentRespond(opts: {
 
   // Provider technical mode: use LLM with strict quoting (no paraphrasing). Fallback to raw list if OpenAI unavailable.
   if (providerScopedPhone) {
+    // Greeting/empty-intent guard for providers
+    const isGreeting = /^(hi|hello|hey|good\s*(morning|afternoon|evening)|how\s*are\s*you\??)$/i.test(msg);
+    if (isGreeting) {
+      let purpose = "I surface quoted lines from your technical sources with [S#] citations. Ask a specific clinical question or guideline to retrieve relevant excerpts.";
+      if (opts.whatsappStyle) purpose = formatWhatsApp(purpose);
+      return { answer: purpose, matches: results, billable: false };
+    }
     if (hasOpenAI) {
       try {
         const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-        const providerSys = `You are Prestrack assisting a healthcare provider over WhatsApp.\n\nSTRUCTURE (MANDATORY):\n1) One short intro sentence addressing the provider (no claims).\n2) Quoted bullets of factual content from sources, each ending with a citation like [S1], [S2].\n3) One short closing sentence (e.g., availability of further details), no new claims.\n\nRULES:\n- Do NOT paraphrase factual content beyond direct quotes.\n- Use ONLY the provided Sources; no external knowledge.\n- No layman simplification; keep clinical phrasing as quoted.\n- If no relevant content, reply: "No relevant lines in sources."`
+        const providerSys = `You are Prestrack assisting a healthcare provider over WhatsApp.\n\nSTRUCTURE (MANDATORY):\n1) One short intro sentence addressing the provider (no claims).\n2) Quoted bullets of factual content from sources, each ending with a citation like [S1], [S2].\n3) One short closing sentence (e.g., availability of further details), no new claims.\n\nSELECTION: Select only lines that directly answer the question. Omit generic lists of topics or headings that are not answering the question.\n\nRULES:\n- Do NOT paraphrase factual content beyond direct quotes.\n- Use ONLY the provided Sources; no external knowledge.\n- No layman simplification; keep clinical phrasing as quoted.\n- If no relevant content, reply: "No relevant lines in sources."\n- Do NOT output unrelated sections or headings just because they match keywords.`
         const ctx = results.slice(0, Math.max(1, Math.min(8, topK))).map((r, i) => `# Source ${i + 1}: ${r.title}${r.sourceUrl ? `\nURL: ${r.sourceUrl}` : ''}\n${r.text}`).join("\n\n");
-        const providerPrompt = `Provider question:\n${msg}\n\nSources:\n${ctx}\n\nFollow the STRUCTURE exactly: intro line, quoted bullets with [S#], closing line.`;
+        const providerPrompt = `Provider question:\n${msg}\n\nSources:\n${ctx}\n\nSelect only directly relevant lines that answer the question (avoid generic enumerations). Follow the STRUCTURE exactly: intro line, quoted bullets with [S#], closing line.`;
         const completion = await client.chat.completions.create({
           model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
           temperature: 0,

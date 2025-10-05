@@ -3,6 +3,7 @@ import { ReactNode } from "react";
 import { cookies } from "next/headers";
 import { verifyJwt } from "@/lib/auth";
 import { LayoutGrid, Users, MessageSquare, Pill, AlertTriangle, Shield } from "lucide-react";
+import LogoutButton from "@/components/LogoutButton";
 
 // Simple cn util fallback if not present
 function classNames(...classes: Array<string | false | undefined>) {
@@ -56,7 +57,10 @@ export default async function DashboardLayout({ children }: { children: ReactNod
               );
             })}
           </nav>
-          <div className="p-4 text-xs text-gray-500 border-t border-gray-200">PresTrack • AI & WhatsApp Healthcare</div>
+          <div className="p-4 border-t border-gray-200">
+            <LogoutButton />
+            <div className="mt-2 text-xs text-gray-500">PresTrack • AI & WhatsApp Healthcare</div>
+          </div>
         </aside>
 
         {/* Main */}
