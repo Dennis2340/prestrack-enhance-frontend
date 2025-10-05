@@ -3,9 +3,9 @@ import prisma from "@/lib/prisma";
 import { ancContactSchema } from "@/lib/validation/anc";
 import { LOINC, LOCAL, DANGER_SIGNS } from "@/lib/fhir/codes";
 
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const patientId = String(params.id);
+    const patientId = String((await params).id);
     const raw = await req.json().catch(() => ({}));
     const parsed = ancContactSchema.safeParse(raw);
     if (!parsed.success) return NextResponse.json({ error: "Invalid payload", issues: parsed.error.flatten() }, { status: 400 });

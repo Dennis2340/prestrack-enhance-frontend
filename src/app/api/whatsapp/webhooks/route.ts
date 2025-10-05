@@ -15,21 +15,31 @@ function extractChatIdAndText(body: any) {
 }
 
 function toPhoneE164(chatId?: string) {
-  if (!chatId) return null
   const digits = String(chatId).replace(/@.*$/, '').replace(/\D/g, '')
   if (!/^\d{6,15}$/.test(digits)) return null
   return `+${digits}`
 }
 
-// Name extraction is intentionally not done here. Let the agent decide and ask.
+// Visitor onboarding and greeting handled here to avoid duplicated replies
 
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}))
-    const { chatId, text, mediaObj } = extractChatIdAndText(body)
+    const { chatId, text, mediaObj, messageId } = (() => {
+      const x: any = extractChatIdAndText(body)
+      return { chatId: x.chatId, text: x.text, mediaObj: x.mediaObj, messageId: x.messageId }
+    })()
     const phoneE164 = toPhoneE164(chatId || undefined)
 
     if (!phoneE164) return NextResponse.json({ status: 'ignored_invalid_chatId' })
+
+    // Idempotency: drop duplicates by provider messageId if we've seen it
+    try {
+      if (messageId) {
+        const dup = await prisma.commMessage.findFirst({ where: { meta: { path: ['messageId'], equals: messageId } }, select: { id: true } })
+        if (dup) return NextResponse.json({ status: 'ignored_duplicate' })
+      }
+    } catch {}
 
     // Fire-and-forget: escalate on any media (audio/video/image/application)
     ;(async () => {
@@ -92,13 +102,13 @@ export async function POST(req: Request) {
             if (!convo) {
               convo = await prisma.conversation.create({ data: { subjectType: 'patient' as any, patientId: subjectId, channel: 'whatsapp' as any, status: 'open' as any, lastMessageAt: new Date() } })
             }
-            await prisma.commMessage.create({ data: { conversationId: convo.id, direction: 'inbound', via: 'whatsapp', body: mediaJson, senderType: 'patient' } })
+            await prisma.commMessage.create({ data: { conversationId: convo.id, direction: 'inbound', via: 'whatsapp', body: mediaJson, senderType: 'patient', meta: { messageId } } })
           } else if (subjectType === 'visitor' && subjectId) {
             let convo = await prisma.conversation.findFirst({ where: { visitorId: subjectId, subjectType: 'visitor' as any }, orderBy: { updatedAt: 'desc' } })
             if (!convo) {
               convo = await prisma.conversation.create({ data: { subjectType: 'visitor' as any, visitorId: subjectId, channel: 'whatsapp' as any, status: 'open' as any, lastMessageAt: new Date() } })
             }
-            await prisma.commMessage.create({ data: { conversationId: convo.id, direction: 'inbound', via: 'whatsapp', body: mediaJson, senderType: 'visitor' } })
+            await prisma.commMessage.create({ data: { conversationId: convo.id, direction: 'inbound', via: 'whatsapp', body: mediaJson, senderType: 'visitor', meta: { messageId } } })
           }
         } catch {}
 
@@ -147,24 +157,24 @@ export async function POST(req: Request) {
       }
     } catch {}
 
-    // Removed hardcoded visitor name prompt; onboarding is handled by the agent via tool when appropriate
+    const incomingText = String(text || '').trim()
 
     // Ensure conversation + log inbound text for analytics/history
     try {
-      const incomingText = String(text || '').trim()
-      if (incomingText) {
+      const incomingText2 = incomingText
+      if (incomingText2) {
         if (isPatient && patientId) {
           let convo = await prisma.conversation.findFirst({ where: { subjectType: 'patient' as any, patientId }, orderBy: { updatedAt: 'desc' } })
           if (!convo) {
             convo = await prisma.conversation.create({ data: { subjectType: 'patient' as any, patientId, channel: 'whatsapp' as any, status: 'open' as any, lastMessageAt: new Date() } })
           }
-          await prisma.commMessage.create({ data: { conversationId: convo.id, direction: 'inbound', via: 'whatsapp', body: incomingText, senderType: 'patient', senderId: patientId } })
+          await prisma.commMessage.create({ data: { conversationId: convo.id, direction: 'inbound', via: 'whatsapp', body: incomingText2, senderType: 'patient', senderId: patientId, meta: { messageId } } })
         } else if (visitorId) {
           let convo = await prisma.conversation.findFirst({ where: { subjectType: 'visitor' as any, visitorId }, orderBy: { updatedAt: 'desc' } })
           if (!convo) {
             convo = await prisma.conversation.create({ data: { subjectType: 'visitor' as any, visitorId, channel: 'whatsapp' as any, status: 'open' as any, lastMessageAt: new Date() } })
           }
-          await prisma.commMessage.create({ data: { conversationId: convo.id, direction: 'inbound', via: 'whatsapp', body: incomingText, senderType: 'visitor', senderId: visitorId } })
+          await prisma.commMessage.create({ data: { conversationId: convo.id, direction: 'inbound', via: 'whatsapp', body: incomingText2, senderType: 'visitor', senderId: visitorId, meta: { messageId } } })
         }
       }
     } catch {}
