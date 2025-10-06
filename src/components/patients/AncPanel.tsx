@@ -409,8 +409,8 @@ export default function AncPanel({ patientId }: { patientId: string }) {
         </div>
       )}
       {detailsOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded shadow p-5 w-[95%] max-w-2xl text-base">
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 overflow-y-auto">
+          <div className="bg-white rounded shadow p-5 w-[95%] max-w-2xl text-base my-8 max-h-[85vh] overflow-y-auto">
             <div className="flex items-center justify-between">
               <div className="text-lg font-semibold">ANC Details</div>
               <button className="text-sm px-2 py-1 border rounded" onClick={()=> setDetailsOpen(false)}>Close</button>
