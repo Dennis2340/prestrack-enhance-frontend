@@ -25,9 +25,9 @@ export function derivePhoneFromEmail(email?: string | null) {
 }
 
 export async function sendWhatsAppViaGateway({ toE164, body, lid }: SendWhatsAppViaGatewayParams) {
-  const base = (process.env.WHATSAPP_GATEWAY_URL || "https://whatsapp-server-integration-faithly.onrender.com").replace(/\/+$/, "");
+  const base = (process.env.WHATSAPP_GATEWAY_URL || "https://hoa-client.onrender.com").replace(/\/+$/, "");
   const resolvedLid = (lid || process.env.WHATSAPP_LID || "").trim() || undefined;
-  const res = await fetch(`${base}/send-whatsapp`, {
+  const res = await fetch(`${base}/send-message`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ 
