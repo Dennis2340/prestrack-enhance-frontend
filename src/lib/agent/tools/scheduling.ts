@@ -1,8 +1,6 @@
 // Meeting scheduling tools for Luna AI agent
 import prisma from '@/lib/prisma';
-import { getCalendlyClient, isCalendlyConfigured, formatCalendlyDate, CalendlySchedulingLink } from '@/lib/calendly';
 import { sendWhatsAppViaGateway } from '@/lib/whatsapp';
-import GoogleMeetGenerator, { GoogleMeetLink } from '@/lib/googleMeet';
 import { getGoogleMeetAPI, isGoogleMeetConfigured, createHOAMeeting, GoogleMeetResponse } from '@/lib/googleMeetApi';
 import { createApprovalRequest, processProviderResponse, getPendingRequests, ApprovalRequestInput } from './providerApproval';
 
@@ -84,33 +82,11 @@ export async function getAvailableSlots(input: AvailableSlotsInput) {
 
     let slotsMessage: string;
 
-    // Try Calendly first, fallback to Google Meet info
-    if (isCalendlyConfigured() && provider.calendlyUserUri) {
-      try {
-        const calendly = getCalendlyClient();
-        
-        // Default to tomorrow if no date provided
-        const targetDate = input.date ? new Date(input.date) : new Date(Date.now() + 24 * 60 * 60 * 1000);
-        const startTime = formatCalendlyDate(new Date(targetDate.setHours(9, 0, 0, 0))); // 9 AM
-        const endTime = formatCalendlyDate(new Date(targetDate.setHours(17, 0, 0, 0))); // 5 PM
-
-        const availableSlots = await calendly.getAvailableTimeSlots(
-          provider.calendlyUserUri,
-          startTime,
-          endTime
-        );
-
-        // Format available slots for WhatsApp
-        slotsMessage = formatAvailableSlotsMessage(availableSlots, targetDate, provider.name);
-      } catch (calendlyError) {
-        console.error('[Available Slots] Calendly failed, showing Google Meet info:', calendlyError);
-        slotsMessage = formatGoogleMeetInfo(provider.name, displayName);
-      }
-    } else if (isGoogleMeetConfigured()) {
-      // Show Google Meet availability info
+    // Show Google Meet availability info only
+    if (isGoogleMeetConfigured()) {
       slotsMessage = formatGoogleMeetAPIInfo(provider.name, displayName);
     } else {
-      // Show Google Meet availability info
+      // Show Google Meet availability info (fallback)
       slotsMessage = formatGoogleMeetInfo(provider.name, displayName);
     }
 
@@ -217,16 +193,12 @@ export async function handleProviderResponse(
 // Helper functions for message formatting
 function formatMeetingMessage(
   displayName: string,
-  provider: ProviderWithCalendly,
+  provider: any,
   meetingLink: string,
-  meetingType: 'calendly' | 'google_meet',
+  meetingType: 'google_meet',
   reason?: string,
   googleMeetEvent?: GoogleMeetResponse | null
 ): string {
-  const meetingTypeText = meetingType === 'google_meet' 
-    ? 'Google Meet (instant access)' 
-    : 'Calendly scheduling link (choose your time)';
-
   let timeInfo = '';
   if (googleMeetEvent && meetingType === 'google_meet') {
     const startTime = new Date(googleMeetEvent.start.dateTime);
@@ -253,14 +225,17 @@ Hello ${displayName}!
 Your consultation with ${provider.name} has been arranged:
 
 📱 *Meeting Link:* ${meetingLink}
-🔗 *Type:* ${meetingTypeText}
+🔗 *Type:* Google Meet (provider approval required)
 👩‍⚕️ *Provider:* ${provider.name}
 ${reason ? `📝 *Reason:* ${reason}` : ''}${timeInfo}
 
-${meetingType === 'google_meet' 
-  ? 'Click the link to join at your scheduled time. The meeting is already created and ready!'
-  : 'Click the link to choose your preferred time slot.'
-}
+🔗 **How it works:**
+• I sent your request to provider
+• Provider confirmed via WhatsApp
+• Once approved, I created Google Meet event
+• You received calendar invitation and Meet link
+
+🔗 *Click the link to join your meeting at the scheduled time.*
 
 This link is ready to use! If you need any changes, just reply here.
 
@@ -270,14 +245,12 @@ Luna ✨`;
 
 function formatProviderMessage(
   displayName: string,
-  provider: ProviderWithCalendly,
+  provider: any,
   meetingLink: string,
-  meetingType: 'calendly' | 'google_meet',
+  meetingType: 'google_meet',
   googleMeetEvent?: GoogleMeetResponse | null
 ): string {
-  const meetingTypeText = meetingType === 'google_meet' 
-    ? 'Google Meet (API created)' 
-    : 'Calendly (scheduling link)';
+  const meetingTypeText = 'Google Meet (API created)';
 
   let timeInfo = '';
   if (googleMeetEvent && meetingType === 'google_meet') {
@@ -305,10 +278,7 @@ function formatProviderMessage(
 🔗 *Meeting Link:* ${meetingLink}
 📱 *Type:* ${meetingTypeText}${timeInfo}
 
-${meetingType === 'google_meet' 
-  ? 'Google Meet event has been created and added to your calendar.'
-  : 'Patient will book their preferred time via Calendly.'
-}
+Google Meet event has been created and added to your calendar.
 
 Please update your calendar accordingly.
 
@@ -325,15 +295,16 @@ Hello ${displayName}!
 📱 *Meeting Type:* Google Meet (provider approval required)
 
 🔗 **How it works:**
-• I'll send your request to the provider
+• I'll send your request to provider
 • Provider will confirm via WhatsApp
-• Once approved, I'll create the Google Meet event
-• You'll receive the calendar invitation and Meet link
+• Once approved, I'll create Google Meet event
+• You'll receive calendar invitation and Meet link
 
 📋 **Next Steps:**
 1. Tell me when you'd like to meet (e.g., "tomorrow at 2 PM")
 2. I'll send the request to ${providerName}
 3. Provider will confirm and I'll create the meeting
+4. You'll receive the link instantly
 
 💡 *Example:* "I'd like to schedule for tomorrow at 2 PM"
 
@@ -353,15 +324,16 @@ Hello ${displayName}!
 📱 *Meeting Type:* Google Meet (provider approval required)
 
 🔗 **How it works:**
-• I'll send your request to the provider
+• I'll send your request to provider
 • Provider will confirm via WhatsApp
-• Once approved, I'll create the meeting link
-• You'll receive the link instantly
+• Once approved, I'll create Google Meet event
+• You'll receive calendar invitation and Meet link
 
 📋 **Next Steps:**
 1. Tell me when you'd like to meet (e.g., "tomorrow at 2 PM")
 2. I'll send the request to ${providerName}
 3. Provider will confirm and I'll create the meeting
+4. You'll receive the link instantly
 
 💡 *Example:* "I'd like to schedule for tomorrow at 2 PM"
 
@@ -369,57 +341,6 @@ Ready to schedule? Just tell me your preferred time!
 
 With care,
 Luna ✨`;
-}
-
-// Helper functions for existing Calendly formatting
-function formatAvailableSlotsMessage(availableSlots: any[], targetDate: Date, providerName: string): string {
-  const dateStr = targetDate.toLocaleDateString('en-US', { 
-    weekday: 'long', 
-    month: 'long', 
-    day: 'numeric' 
-  });
-
-  if (availableSlots.length === 0) {
-    return `📅 *Availability Check*
-
-Hello! 
-
-👩‍⚕️ *Provider:* ${providerName}
-📅 *Date:* ${dateStr}
-
-❌ No available slots found for this date.
-
-💡 Try a different date or I can create an instant Google Meet link for you!
-
-Just reply with your preferred date and time.
-
-With care,
-Luna ✨`;
-  }
-
-  let message = `📅 *Available Time Slots*
-
-👩‍⚕️ *Provider:* ${providerName}
-📅 *Date:* ${dateStr}
-
-✅ Available times:\n\n`;
-
-  availableSlots.forEach((slot, index) => {
-    const time = new Date(slot.start_time).toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true
-    });
-    message += `${index + 1}. ${time}\n`;
-  });
-
-  message += `\n💡 Reply with your preferred time number (e.g., "I want slot 2")
-Or tell me "Google Meet" for instant access!
-
-With care,
-Luna ✨`;
-
-  return message;
 }
 
 // Helper functions for display name and provider lookup
@@ -506,24 +427,11 @@ function parsePreferredTime(preferredTime?: string): Date {
 
   // Default to tomorrow at 2 PM if parsing fails
   const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-  tomorrow.setHours(14, 0, 0, 0);
-  return tomorrow;
+    tomorrow.setHours(14, 0, 0, 0);
+    return tomorrow;
 }
 
-interface ProviderWithCalendly {
-  id: string;
-  userId: string;
-  phoneE164: string;
-  notifyMedication: boolean;
-  notifyEscalation: boolean;
-  notificationCooldownMinutes: number;
-  name: string;
-  email: string;
-  calendlyUserUri?: string;
-  uri?: string;
-}
-
-async function findProvider(providerName?: string): Promise<ProviderWithCalendly | null> {
+async function findProvider(providerName?: string): Promise<any> {
   try {
     const whereClause = providerName 
       ? { user: { name: { contains: providerName, mode: 'insensitive' as const } } }
@@ -548,46 +456,22 @@ async function findProvider(providerName?: string): Promise<ProviderWithCalendly
       if (!fallbackProvider) {
         return null;
       }
-      
-      // Try to get Calendly user URI by email for fallback
-      let calendlyUserUri = null;
-      if (fallbackProvider.user.email) {
-        try {
-          const calendly = getCalendlyClient();
-          const calendlyUser = await calendly.getUserByEmail(fallbackProvider.user.email);
-          calendlyUserUri = calendlyUser?.uri || null;
-        } catch (error) {
-          console.error('[Find Provider Fallback] Calendly lookup error:', error);
-        }
-      }
 
       return {
         ...fallbackProvider,
         name: fallbackProvider.user.name,
         email: fallbackProvider.user.email,
-        calendlyUserUri: calendlyUserUri || fallbackProvider.user.email,
-        uri: calendlyUserUri || `/users/${fallbackProvider.user.email}`
+        calendlyUserUri: null, // No Calendly integration
+        uri: null,
       };
-    }
-
-    // Try to get Calendly user URI by email
-    let calendlyUserUri = null;
-    if (provider.user.email) {
-      try {
-        const calendly = getCalendlyClient();
-        const calendlyUser = await calendly.getUserByEmail(provider.user.email);
-        calendlyUserUri = calendlyUser?.uri || null;
-      } catch (error) {
-        console.error('[Find Provider] Calendly lookup error:', error);
-      }
     }
 
     return {
       ...provider,
       name: provider.user.name,
       email: provider.user.email,
-      calendlyUserUri: calendlyUserUri || provider.user.email, // Use Calendly URI if found
-      uri: calendlyUserUri || `/users/${provider.user.email}` // Use actual Calendly URI
+      calendlyUserUri: null, // No Calendly integration
+      uri: null,
     };
   } catch (error) {
     console.error('[Find Provider] Error:', error);
