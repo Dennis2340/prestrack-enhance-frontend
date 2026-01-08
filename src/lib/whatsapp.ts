@@ -24,14 +24,13 @@ export function derivePhoneFromEmail(email?: string | null) {
 }
 
 export async function sendWhatsAppViaGateway({ toE164, body }: SendWhatsAppViaGatewayParams) {
-  const base = (process.env.WHATSAPP_GATEWAY_URL || "https://whatsapp-server-integration-aidex.onrender.com").replace(/\/+$/, "");
+  const base = (process.env.WHATSAPP_GATEWAY_URL || "https://whatsapp-server-integration-faithly.onrender.com").replace(/\/+$/, "");
   const res = await fetch(`${base}/send-whatsapp`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ 
       phoneE164: toE164, 
-      message: body,
-      lid: "default" // Add required lid parameter for WhatsApp chat table
+      message: body
     }),
   });
   if (!res.ok) {
