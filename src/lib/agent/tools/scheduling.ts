@@ -440,7 +440,7 @@ async function findProvider(providerName?: string): Promise<any> {
     const provider = await prisma.providerProfile.findFirst({
       where: whereClause,
       include: {
-        user: { select: { name: true, email: true } }
+        user: true
       },
       orderBy: { user: { name: 'asc' } }
     });
@@ -449,7 +449,7 @@ async function findProvider(providerName?: string): Promise<any> {
       // Get any provider as fallback
       const fallbackProvider = await prisma.providerProfile.findFirst({
         include: {
-          user: { select: { name: true, email: true } }
+          user: true
         }
       });
       
