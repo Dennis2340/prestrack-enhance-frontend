@@ -334,18 +334,13 @@ Example:
         } else if (action === 'start_interactive_scheduling' && patientScopedPhone) {
           try {
             const patient = await getPatientByPhone(patientScopedPhone);
-            const session = await startSchedulingSession(
-              patientScopedPhone,
-              patient?.id || '',
-              parsed.provider_name
-            );
             await scheduleMeeting({
               phoneE164: patientScopedPhone,
               providerName: parsed.provider_name,
               preferredTime: parsed.preferred_time,
               reason: parsed.reason,
               subjectType: 'patient',
-              subjectId: null,
+              subjectId: patient?.id || null,
             });
             answer = providedAnswer || "I've sent you a scheduling link! Please check your WhatsApp to book your appointment.";
           } catch (e: any) {
