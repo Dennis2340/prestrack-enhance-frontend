@@ -23,7 +23,7 @@ export async function startSchedulingSession(
   phoneE164: string,
   patientId: string,
   providerName?: string
-): Promise<SchedulingSession> {
+): Promise<{session: SchedulingSession, message: string}> {
   const sessionId = `sched_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   
   // Find provider
@@ -44,18 +44,7 @@ export async function startSchedulingSession(
   // Store session
   await storeSchedulingSession(session);
 
-  // Send time selection message
-  await sendTimeSelectionMessage(phoneE164, provider, session);
-
-  return session;
-}
-
-// Send time selection message
-async function sendTimeSelectionMessage(
-  phoneE164: string,
-  provider: any,
-  session: SchedulingSession
-) {
+  // Generate time selection message (don't send directly)
   const message = `📅 *Schedule Your Appointment*
 
 👩‍⚕️ *Provider:* ${provider.name}
@@ -79,11 +68,9 @@ This session expires in 30 minutes
 With care,
 Luna ✨`;
 
-  await sendWhatsAppViaGateway({ 
-    toE164: phoneE164, 
-    body: message 
-  });
+  return { session, message };
 }
+
 
 // Process time selection and create approval request
 export async function processTimeSelection(
@@ -91,7 +78,7 @@ export async function processTimeSelection(
   phoneE164: string,
   preferredTime: string,
   reason?: string
-): Promise<void> {
+): Promise<string> {
   const session = await getSchedulingSession(sessionId);
   if (!session || session.status !== 'selecting_time') {
     throw new Error('Invalid or expired session');
@@ -102,7 +89,7 @@ export async function processTimeSelection(
     throw new Error('Provider not found');
   }
 
-  // Parse the requested time
+  // Parse requested time
   const requestedTime = parsePreferredTime(preferredTime);
 
   // Update session
@@ -123,16 +110,7 @@ export async function processTimeSelection(
     reason: reason,
   });
 
-  // Send confirmation to patient
-  await sendApprovalRequestConfirmation(phoneE164, provider, requestedTime);
-}
-
-// Send approval request confirmation to patient
-async function sendApprovalRequestConfirmation(
-  phoneE164: string,
-  provider: any,
-  requestedTime: Date
-) {
+  // Generate confirmation message (don't send directly)
   const message = `✅ *Meeting Request Sent*
 
 👩‍⚕️ *Provider:* ${provider.name}
@@ -158,11 +136,9 @@ Need to make changes? Reply "reschedule" anytime!
 With care,
 Luna ✨`;
 
-  await sendWhatsAppViaGateway({ 
-    toE164: phoneE164, 
-    body: message 
-  });
+  return message;
 }
+
 
 // Helper functions
 async function findProviderForScheduling(providerName?: string): Promise<any> {

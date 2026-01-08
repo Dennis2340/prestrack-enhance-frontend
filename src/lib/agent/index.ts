@@ -334,38 +334,34 @@ Example:
         } else if (action === 'start_interactive_scheduling' && patientScopedPhone) {
           try {
             const patient = await getPatientByPhone(patientScopedPhone);
-            await scheduleMeeting({
-              phoneE164: patientScopedPhone,
-              providerName: parsed.provider_name,
-              preferredTime: parsed.preferred_time,
-              reason: parsed.reason,
-              subjectType: 'patient',
-              subjectId: patient?.id || null,
-            });
-            answer = providedAnswer || "I've sent you a scheduling link! Please check your WhatsApp to book your appointment.";
+            const result = await startSchedulingSession(
+              patientScopedPhone,
+              patient?.id || '',
+              parsed.provider_name
+            );
+            answer = providedAnswer || result.message;
           } catch (e: any) {
-            console.error('[Agent->schedule_meeting] error', e?.message || e);
-            answer = "I'm having trouble scheduling right now. Please try again later.";
+            console.error('[Agent->start_interactive_scheduling] error', e?.message || e);
+            answer = "I'm having trouble starting the scheduling process. Please try again later.";
           }
-        } else if (action === 'check_availability' && patientScopedPhone) {
+        } else if (action === 'process_time_selection' && patientScopedPhone) {
           try {
-            await getAvailableSlots({
-              phoneE164: patientScopedPhone,
-              providerName: parsed.provider_name,
-              date: parsed.date,
-              subjectType: 'patient',
-              subjectId: null,
-            });
-            answer = providedAnswer || "I've sent you the available appointment times!";
+            const message = await processTimeSelection(
+              parsed.session_id || '',
+              patientScopedPhone,
+              parsed.preferred_time || 'tomorrow at 2 PM',
+              parsed.reason
+            );
+            answer = providedAnswer || message;
           } catch (e: any) {
-            console.error('[Agent->check_availability] error', e?.message || e);
-            answer = "I'm having trouble checking availability right now. Please try again later.";
+            console.error('[Agent->process_time_selection] error', e?.message || e);
+            answer = "I'm having trouble scheduling your appointment. Please try again.";
           }
         } else if (providerScopedPhone && (msg.toLowerCase().includes('confirm') || msg.toLowerCase().includes('decline') || msg.toLowerCase().includes('pending'))) {
           // Handle provider responses for meeting approvals
           try {
             const result = await handleProviderResponse(providerScopedPhone, msg);
-            answer = result.response;
+            answer = providedAnswer || result.response;
           } catch (e: any) {
             console.error('[Agent->provider_response] error', e?.message || e);
             answer = "I'm having trouble processing your response. Please try again.";
