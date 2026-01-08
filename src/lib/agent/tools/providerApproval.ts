@@ -298,8 +298,8 @@ ${request.reason ? `📝 *Reason:* ${request.reason}` : ''}
 Please confirm or decline this meeting request.
 
 Reply with:
-• "CONFIRM ${request.id}" to approve
-• "DECLINE ${request.id}" to reject
+• "YES" to approve
+• "NO" to decline
 
 ⏰ *Expires in 2 hours*
 

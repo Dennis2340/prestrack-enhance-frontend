@@ -4,11 +4,11 @@ import { ragSearch } from "./tools/rag";
 import OpenAI from "openai";
 import { createMedicalEscalation } from "./tools/medical";
 import { fetchPatientContextByPhone } from "./tools/patientContext";
-import { scheduleMeeting, getAvailableSlots, handleProviderResponse } from "./tools/scheduling";
+import { scheduleMeeting, getAvailableSlots } from "./tools/scheduling";
 import { 
   startSchedulingSession, 
-
-  processTimeSelection 
+  processTimeSelection,
+  handleProviderApprovalResponse
 } from "./tools/interactiveScheduling";
 import prisma from "@/lib/prisma";
 
@@ -369,10 +369,10 @@ Example:
           // Keep this lightweight: direct user into the interactive flow.
           // (We avoid claiming a meeting is created before provider approval.)
           answer = providedAnswer || "I can help you schedule this. Tell me a preferred time (e.g., 'tomorrow at 2 PM'), and I'll send it to the provider for approval.";
-        } else if (providerScopedPhone && (msg.toLowerCase().includes('confirm') || msg.toLowerCase().includes('decline') || msg.toLowerCase().includes('pending'))) {
+        } else if (providerScopedPhone && (msg.toLowerCase().includes('confirm') || msg.toLowerCase().includes('decline') || msg.toLowerCase().includes('pending') || msg.toLowerCase().trim() === 'yes' || msg.toLowerCase().trim() === 'no')) {
           // Handle provider responses for meeting approvals
           try {
-            const result = await handleProviderResponse(providerScopedPhone, msg);
+            const result = await handleProviderApprovalResponse(providerScopedPhone, msg);
             answer = providedAnswer || result.response;
           } catch (e: any) {
             console.error('[Agent->provider_response] error', e?.message || e);

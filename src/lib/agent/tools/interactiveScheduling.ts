@@ -2,7 +2,7 @@
 // Patients select time → Provider approval → Google Meet event creation
 
 import prisma from '@/lib/prisma';
-import { createApprovalRequest } from './providerApproval';
+import { createApprovalRequest, processProviderResponse, getPendingRequests } from './providerApproval';
 
 function hydrateSchedulingSession(session: any): SchedulingSession | null {
   if (!session || typeof session !== 'object') return null;
@@ -457,7 +457,139 @@ async function getSchedulingSession(sessionId: string): Promise<SchedulingSessio
     const metadata = doc.metadata as any;
     const parsed = JSON.parse(metadata.sessionData);
     return hydrateSchedulingSession(parsed);
-  } catch {
+  } catch (error) {
+    console.error('[getSchedulingSession] Error:', error);
     return null;
+  }
+}
+
+/**
+ * Handle provider YES/NO responses for meeting approvals (interactive scheduling)
+ */
+export async function handleProviderApprovalResponse(
+  providerPhone: string,
+  message: string
+): Promise<{ success: boolean; response: string }> {
+  try {
+    const msg = message.toLowerCase().trim();
+
+    // Handle simple YES/NO responses
+    if (msg === 'yes' || msg === 'confirm') {
+      // Find the most recent pending request for this provider
+      const pendingRequests = await getPendingRequests(providerPhone);
+      
+      if (pendingRequests.length === 0) {
+        return {
+          success: false,
+          response: 'You have no pending meeting requests to approve.'
+        };
+      }
+
+      // Use the most recent pending request
+      const latestRequest = pendingRequests[0];
+      const result = await processProviderResponse(latestRequest.id, 'confirm', providerPhone);
+      
+      return {
+        success: result.success,
+        response: result.success && result.meetingLink 
+          ? `✅ Meeting approved and created!\n\n🔗 Meeting Link: ${result.meetingLink}\n\n${result.message}`
+          : result.message
+      };
+    }
+
+    if (msg === 'no' || msg === 'decline') {
+      // Find the most recent pending request for this provider
+      const pendingRequests = await getPendingRequests(providerPhone);
+      
+      if (pendingRequests.length === 0) {
+        return {
+          success: false,
+          response: 'You have no pending meeting requests to decline.'
+        };
+      }
+
+      // Use the most recent pending request
+      const latestRequest = pendingRequests[0];
+      const result = await processProviderResponse(latestRequest.id, 'decline', providerPhone);
+      
+      return {
+        success: result.success,
+        response: result.message
+      };
+    }
+
+    // Legacy support for CONFIRM/DECLINE with ID
+    const confirmMatch = message.match(/CONFIRM\s+(approval-\d+-[a-z0-9]+)/i);
+    const declineMatch = message.match(/DECLINE\s+(approval-\d+-[a-z0-9]+)/i);
+
+    if (confirmMatch) {
+      const requestId = confirmMatch[1];
+      const result = await processProviderResponse(requestId, 'confirm', providerPhone);
+      
+      return {
+        success: result.success,
+        response: result.message
+      };
+    }
+
+    if (declineMatch) {
+      const requestId = declineMatch[1];
+      const result = await processProviderResponse(requestId, 'decline', providerPhone);
+      
+      return {
+        success: result.success,
+        response: result.message
+      };
+    }
+
+    // Check for provider asking for pending requests
+    if (message.toLowerCase().includes('pending') || message.toLowerCase().includes('requests')) {
+      const pendingRequests = await getPendingRequests(providerPhone);
+      
+      if (pendingRequests.length === 0) {
+        return {
+          success: true,
+          response: 'You have no pending meeting requests.'
+        };
+      }
+
+      let responseText = `📋 *Pending Meeting Requests*\n\n`;
+      
+      pendingRequests.forEach((request, index) => {
+        const timeStr = request.requestedTime.toLocaleString('en-US', {
+          weekday: 'short',
+          month: 'short',
+          day: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true,
+        });
+        
+        responseText += `${index + 1}. ${request.patientName}\n`;
+        responseText += `   📅 ${timeStr}\n`;
+        responseText += `   📱 ${request.patientPhone}\n`;
+        responseText += `   🆔 ${request.id}\n`;
+        responseText += `   ⏰ Expires: ${request.expiresAt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}\n\n`;
+      });
+
+      responseText += `Reply with "YES" to approve the most recent request, "NO" to decline it, or "CONFIRM [ID]"/"DECLINE [ID]" for a specific request.`;
+
+      return {
+        success: true,
+        response: responseText
+      };
+    }
+
+    return {
+      success: false,
+      response: 'I didn\'t understand that. For meeting requests, reply with "YES" to approve, "NO" to decline, or say "pending" to see your requests.'
+    };
+
+  } catch (error) {
+    console.error('[Handle Provider Approval Response] Error:', error);
+    return {
+      success: false,
+      response: 'Failed to process your response. Please try again.'
+    };
   }
 }

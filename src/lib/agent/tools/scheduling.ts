@@ -114,7 +114,54 @@ export async function handleProviderResponse(
   message: string
 ): Promise<{ success: boolean; response: string }> {
   try {
-    // Parse the message for approval responses
+    const msg = message.toLowerCase().trim();
+
+    // Handle simple YES/NO responses
+    if (msg === 'yes' || msg === 'confirm') {
+      // Find the most recent pending request for this provider
+      const pendingRequests = await getPendingRequests(providerPhone);
+      
+      if (pendingRequests.length === 0) {
+        return {
+          success: false,
+          response: 'You have no pending meeting requests to approve.'
+        };
+      }
+
+      // Use the most recent pending request
+      const latestRequest = pendingRequests[0];
+      const result = await processProviderResponse(latestRequest.id, 'confirm', providerPhone);
+      
+      return {
+        success: result.success,
+        response: result.success && result.meetingLink 
+          ? `✅ Meeting approved and created!\n\n🔗 Meeting Link: ${result.meetingLink}\n\n${result.message}`
+          : result.message
+      };
+    }
+
+    if (msg === 'no' || msg === 'decline') {
+      // Find the most recent pending request for this provider
+      const pendingRequests = await getPendingRequests(providerPhone);
+      
+      if (pendingRequests.length === 0) {
+        return {
+          success: false,
+          response: 'You have no pending meeting requests to decline.'
+        };
+      }
+
+      // Use the most recent pending request
+      const latestRequest = pendingRequests[0];
+      const result = await processProviderResponse(latestRequest.id, 'decline', providerPhone);
+      
+      return {
+        success: result.success,
+        response: result.message
+      };
+    }
+
+    // Legacy support for CONFIRM/DECLINE with ID
     const confirmMatch = message.match(/CONFIRM\s+(approval-\d+-[a-z0-9]+)/i);
     const declineMatch = message.match(/DECLINE\s+(approval-\d+-[a-z0-9]+)/i);
 
@@ -168,7 +215,7 @@ export async function handleProviderResponse(
         responseText += `   ⏰ Expires: ${request.expiresAt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}\n\n`;
       });
 
-      responseText += `Reply with "CONFIRM [ID]" or "DECLINE [ID]" to respond.`;
+      responseText += `Reply with "YES" to approve the most recent request, "NO" to decline it, or "CONFIRM [ID]"/"DECLINE [ID]" for a specific request.`;
 
       return {
         success: true,
@@ -178,7 +225,7 @@ export async function handleProviderResponse(
 
     return {
       success: false,
-      response: 'I didn\'t understand that. For meeting requests, reply with "CONFIRM [request-id]" or "DECLINE [request-id]", or say "pending" to see your requests.'
+      response: 'I didn\'t understand that. For meeting requests, reply with "YES" to approve, "NO" to decline, or say "pending" to see your requests.'
     };
 
   } catch (error) {
