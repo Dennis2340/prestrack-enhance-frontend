@@ -26,9 +26,14 @@ const Navbar = () => {
       }`}
     >
       <div className="h-full px-4 sm:px-6 lg:px-8 mx-auto max-w-7xl flex items-center justify-between">
-        <Link href="/" className="flex items-center">
-          <span className="text-2xl font-bold bg-gradient-to-r from-green-600 to-teal-400 text-transparent bg-clip-text transition-all duration-300 hover:from-teal-500 hover:to-green-500">
-            PresTrack
+        <Link href="/" className="flex items-center space-x-2">
+          <img 
+            src="/hoa-logo.jpeg" 
+            alt="HOA Logo" 
+            className="h-8 w-8 rounded-lg object-cover"
+          />
+          <span className="text-2xl font-bold bg-gradient-to-r from-rose-600 to-purple-600 text-transparent bg-clip-text transition-all duration-300 hover:from-purple-500 hover:to-rose-500">
+            HOA
           </span>
         </Link>
 
@@ -36,19 +41,19 @@ const Navbar = () => {
         <div className="hidden sm:flex items-center space-x-6">
           <Link
             href="/admin/providers"
-            className="font-medium text-gray-600 hover:text-green-600 transition-colors duration-300"
+            className="font-medium text-gray-600 hover:text-rose-600 transition-colors duration-300"
           >
             Care Providers
           </Link>
           <Link
             href="/admin/rag"
-            className="font-medium text-gray-600 hover:text-green-600 transition-colors duration-300"
+            className="font-medium text-gray-600 hover:text-rose-600 transition-colors duration-300"
           >
             RAG Ingestion
           </Link>
           <Link
             href="/login"
-            className="font-medium text-gray-600 hover:text-green-600 transition-colors duration-300"
+            className="font-medium text-gray-600 hover:text-rose-600 transition-colors duration-300"
           >
             Login
           </Link>
@@ -79,21 +84,21 @@ const Navbar = () => {
         <div className="flex flex-col p-4 space-y-4">
           <Link
             href="/admin/providers"
-            className="px-3 py-2 rounded-md text-gray-700 hover:bg-green-50 hover:text-green-600 transition-colors duration-300"
+            className="px-3 py-2 rounded-md text-gray-700 hover:bg-rose-50 hover:text-rose-600 transition-colors duration-300"
             onClick={() => setIsOpen(false)}
           >
             Care Providers
           </Link>
           <Link
             href="/admin/rag"
-            className="px-3 py-2 rounded-md text-gray-700 hover:bg-green-50 hover:text-green-600 transition-colors duration-300"
+            className="px-3 py-2 rounded-md text-gray-700 hover:bg-rose-50 hover:text-rose-600 transition-colors duration-300"
             onClick={() => setIsOpen(false)}
           >
             RAG Ingestion
           </Link>
           <Link
             href="/login"
-            className="px-3 py-2 rounded-md text-gray-700 hover:bg-green-50 hover:text-green-600 transition-colors duration-300"
+            className="px-3 py-2 rounded-md text-gray-700 hover:bg-rose-50 hover:text-rose-600 transition-colors duration-300"
             onClick={() => setIsOpen(false)}
           >
             Login

@@ -4,11 +4,33 @@ import { ragSearch } from "./tools/rag";
 import OpenAI from "openai";
 import { createMedicalEscalation } from "./tools/medical";
 import { fetchPatientContextByPhone } from "./tools/patientContext";
+import { scheduleMeeting, getAvailableSlots } from "./tools/scheduling";
+import { 
+  startSchedulingSession, 
+  processDateSelection, 
+  processTimeSlotSelection 
+} from "./tools/interactiveScheduling";
 import prisma from "@/lib/prisma";
 
 export type AgentHistoryItem = { role: "user" | "assistant" | "system"; content: string };
 export type RagSearchResult = { title: string; text: string; score: number; sourceUrl?: string };
 export type AgentResponse = { answer: string; matches: RagSearchResult[]; billable: boolean };
+
+// Helper function to get patient by phone
+async function getPatientByPhone(phoneE164: string) {
+  try {
+    const contact = await prisma.contactChannel.findFirst({
+      where: { type: 'whatsapp', value: phoneE164 },
+      include: {
+        patient: { select: { id: true, firstName: true, lastName: true } }
+      }
+    });
+
+    return contact?.patient || null;
+  } catch {
+    return null;
+  }
+}
 
 // Optional per-request context shared with tools
 let INCOMING_PHONE_E164: string | null = null;
@@ -119,7 +141,7 @@ export async function agentRespond(opts: {
     if (hasOpenAI) {
       try {
         const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-        const providerSys = `You are Prestrack assisting a healthcare provider over WhatsApp.\n\nSTRUCTURE (MANDATORY):\n1) One short intro sentence addressing the provider (no claims).\n2) Quoted bullets of factual content from sources, each ending with a citation like [S1], [S2].\n3) One short closing sentence (e.g., availability of further details), no new claims.\n\nSELECTION: Select only lines that directly answer the question. Omit generic lists of topics or headings that are not answering the question.\n\nRULES:\n- Do NOT paraphrase factual content beyond direct quotes.\n- Use ONLY the provided Sources; no external knowledge.\n- No layman simplification; keep clinical phrasing as quoted.\n- If no relevant content, reply: "No relevant lines in sources."\n- Do NOT output unrelated sections or headings just because they match keywords.`
+        const providerSys = `You are Luna, a women's wellness AI assistant helping healthcare providers over WhatsApp.\n\nSTRUCTURE (MANDATORY):\n1) One short intro sentence addressing the provider (no claims).\n2) Quoted bullets of factual content from sources, each ending with a citation like [S1], [S2].\n3) One short closing sentence (e.g., availability of further details), no new claims.\n\nSELECTION: Select only lines that directly answer the question. Omit generic lists of topics or headings that are not answering the question.\n\nRULES:\n- Do NOT paraphrase factual content beyond direct quotes.\n- Use ONLY the provided Sources; no external knowledge.\n- No layman simplification; keep clinical phrasing as quoted.\n- If no relevant content, reply: "No relevant lines in sources."\n- Do NOT output unrelated sections or headings just because they match keywords.`
         const ctx = results.slice(0, Math.max(1, Math.min(8, topK))).map((r, i) => `# Source ${i + 1}: ${r.title}${r.sourceUrl ? `\nURL: ${r.sourceUrl}` : ''}\n${r.text}`).join("\n\n");
         const providerPrompt = `Provider question:\n${msg}\n\nSources:\n${ctx}\n\nSelect only directly relevant lines that answer the question (avoid generic enumerations). Follow the STRUCTURE exactly: intro line, quoted bullets with [S#], closing line.`;
         const completion = await client.chat.completions.create({
@@ -161,12 +183,13 @@ export async function agentRespond(opts: {
   if (hasOpenAI) {
     try {
       const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-      const base = `You are Prestrack, a helpful clinical assistant answering over WhatsApp. Keep replies concise, readable, and actionable:
+      const base = `You are Luna, a compassionate women's wellness AI assistant answering over WhatsApp. Keep replies concise, readable, and actionable:
  - Limit to ~6 short lines.
  - Prefer short sentences and simple bullets.
  - Prefer using the provided Context when available; summarize only the most relevant facts from Context.
  - If Context is missing or thin, provide general, evidence-based health guidance within common clinical practice. Keep it high-level and safe.
- - Avoid long URLs unless essential.`;
+ - Avoid long URLs unless essential.
+ - You can help schedule appointments with healthcare providers via Calendly integration.`;
 
       const patientStyle = `
 TONE AND STYLE FOR PATIENTS:
@@ -187,12 +210,50 @@ DOMAIN AND SAFETY (MANDATORY):
 - If unsure, say you don't know.
 `;
 
+      const scheduling = `
+SCHEDULING CAPABILITIES:
+- When users ask to "schedule appointment", "book meeting", "see doctor", "consultation", or similar, use action='schedule_meeting'.
+- For "available times", "when can I see someone", "availability", use action='check_availability'.
+- For interactive scheduling with date/time selection, use action='start_interactive_scheduling'.
+- Include provider_name if specified, otherwise use any available provider.
+- Include preferred_time if mentioned (e.g., "tomorrow morning", "next week").
+- Include reason for appointment if mentioned.
+`;
+
+      const escalation = `
+WHEN TO ESCALATE (MANDATORY):
+If the user indicates ANC danger signs (any of: severe headache, blurred vision, heavy vaginal bleeding, severe abdominal pain, reduced fetal movements, fever ≥38°C, convulsions/seizure, severe shortness of breath, swelling of face/hands), set action='escalate' and include a short escalate_summary. Keep reply concise and reassuring.
+`;
+
+      const outputFormat = `
+OUTPUT FORMAT (MANDATORY):
+Return a single JSON object with keys:
+- action: 'answer' | 'escalate' | 'onboard_name' | 'schedule_meeting' | 'check_availability' | 'start_interactive_scheduling' | 'process_date_selection' | 'process_time_selection'
+- answer: string (message to send to the user, WhatsApp-friendly)
+- escalate_summary?: string (short summary if action is 'escalate')
+- name?: string (when action is 'onboard_name', the visitor name to save)
+- provider_name?: string (for scheduling actions)
+- preferred_time?: string (for scheduling actions)
+- reason?: string (reason for appointment)
+- date?: string (YYYY-MM-DD for availability checks)
+- selected_dates?: string[] (for date selection, array of dates)
+- time_slot_index?: number (for time slot selection)
+- session_id?: string (for interactive scheduling session)
+Example:
+{"action":"answer","answer":"..."}
+Example:
+{"action":"start_interactive_scheduling","answer":"I'll help you schedule an appointment! Let me check availability...","provider_name":"Dr. Smith"}
+Example:
+{"action":"process_date_selection","answer":"Great! I'll check time slots for those dates.","selected_dates":["2024-01-15","2024-01-16"]}
+`;
+
       const sys = [
         base,
         (providerScopedPhone ? providerStyle : patientStyle),
         safety,
-        `WHEN TO ESCALATE (MANDATORY):\nIf the user indicates ANC danger signs (any of: severe headache, blurred vision, heavy vaginal bleeding, severe abdominal pain, reduced fetal movements, fever ≥38°C, convulsions/seizure, severe shortness of breath, swelling of face/hands), set action='escalate' and include a short escalate_summary. Keep reply concise and reassuring.`,
-        `OUTPUT FORMAT (MANDATORY):\nReturn a single JSON object with keys:\n- action: 'answer' | 'escalate' | 'onboard_name'\n- answer: string (message to send to the user, WhatsApp-friendly)\n- escalate_summary?: string (short summary if action is 'escalate')\n- name?: string (when action is 'onboard_name', the visitor name to save)\nExample:\n{"action":"answer","answer":"..."}`,
+        scheduling,
+        escalation,
+        outputFormat,
       ].join("\n\n");
 
       const ragBlock = results.slice(0, Math.max(1, Math.min(8, topK))).map((r, i) => `# Source ${i + 1}: ${r.title}${r.sourceUrl ? `\nURL: ${r.sourceUrl}` : ''}\n${r.text}`).join("\n\n");
@@ -270,6 +331,72 @@ DOMAIN AND SAFETY (MANDATORY):
           }
           // Send the provided answer or a friendly default
           answer = providedAnswer || "Thanks — noted. How can I help you today?";
+        } else if (action === 'start_interactive_scheduling' && patientScopedPhone) {
+          try {
+            const patient = await getPatientByPhone(patientScopedPhone);
+            const session = await startSchedulingSession(
+              patientScopedPhone,
+              patient?.id || '',
+              parsed.provider_name
+            );
+            answer = providedAnswer || "I've sent you available dates to choose from! Please check your WhatsApp and select the dates that work for you.";
+          } catch (e: any) {
+            console.error('[Agent->start_interactive_scheduling] error', e?.message || e);
+            answer = "I'm having trouble starting the scheduling process. Please try again later.";
+          }
+        } else if (action === 'process_date_selection' && patientScopedPhone) {
+          try {
+            await processDateSelection(
+              parsed.session_id || '',
+              patientScopedPhone,
+              parsed.selected_dates || []
+            );
+            answer = providedAnswer || "Great! I'm checking available time slots for your selected dates.";
+          } catch (e: any) {
+            console.error('[Agent->process_date_selection] error', e?.message || e);
+            answer = "I'm having trouble processing your date selection. Please try again.";
+          }
+        } else if (action === 'process_time_selection' && patientScopedPhone) {
+          try {
+            await processTimeSlotSelection(
+              parsed.session_id || '',
+              patientScopedPhone,
+              parsed.time_slot_index || 1
+            );
+            answer = providedAnswer || "Perfect! Your appointment has been scheduled. Check your WhatsApp for the meeting link.";
+          } catch (e: any) {
+            console.error('[Agent->process_time_selection] error', e?.message || e);
+            answer = "I'm having trouble scheduling your appointment. Please try again.";
+          }
+        } else if (action === 'schedule_meeting' && patientScopedPhone) {
+          try {
+            await scheduleMeeting({
+              phoneE164: patientScopedPhone,
+              providerName: parsed.provider_name,
+              preferredTime: parsed.preferred_time,
+              reason: parsed.reason,
+              subjectType: 'patient',
+              subjectId: null,
+            });
+            answer = providedAnswer || "I've sent you a scheduling link! Please check your WhatsApp to book your appointment.";
+          } catch (e: any) {
+            console.error('[Agent->schedule_meeting] error', e?.message || e);
+            answer = "I'm having trouble scheduling right now. Please try again later.";
+          }
+        } else if (action === 'check_availability' && patientScopedPhone) {
+          try {
+            await getAvailableSlots({
+              phoneE164: patientScopedPhone,
+              providerName: parsed.provider_name,
+              date: parsed.date,
+              subjectType: 'patient',
+              subjectId: null,
+            });
+            answer = providedAnswer || "I've sent you the available appointment times!";
+          } catch (e: any) {
+            console.error('[Agent->check_availability] error', e?.message || e);
+            answer = "I'm having trouble checking availability right now. Please try again later.";
+          }
         } else if (providedAnswer) {
           answer = providedAnswer;
         } else {

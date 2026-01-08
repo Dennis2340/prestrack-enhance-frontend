@@ -16,8 +16,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "PresTrack",
-  description: "This is an AI powered communication app for the prestrack",
+  title: "HOA - Women's Wellness Hub",
+  description: "A private digital home for accurate cycle tracking, community support, and expert care—designed by women, for women.",
 };
 
 export default function RootLayout({
