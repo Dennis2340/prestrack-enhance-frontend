@@ -40,22 +40,10 @@ const Navbar = () => {
         {/* Desktop Navigation */}
         <div className="hidden sm:flex items-center space-x-6">
           <Link
-            href="/admin/providers"
-            className="font-medium text-gray-600 hover:text-rose-600 transition-colors duration-300"
-          >
-            Care Providers
-          </Link>
-          <Link
-            href="/admin/rag"
-            className="font-medium text-gray-600 hover:text-rose-600 transition-colors duration-300"
-          >
-            RAG Ingestion
-          </Link>
-          <Link
             href="/login"
             className="font-medium text-gray-600 hover:text-rose-600 transition-colors duration-300"
           >
-            Login
+            Provider Portal
           </Link>
         </div>
 
@@ -83,25 +71,11 @@ const Navbar = () => {
       >
         <div className="flex flex-col p-4 space-y-4">
           <Link
-            href="/admin/providers"
-            className="px-3 py-2 rounded-md text-gray-700 hover:bg-rose-50 hover:text-rose-600 transition-colors duration-300"
-            onClick={() => setIsOpen(false)}
-          >
-            Care Providers
-          </Link>
-          <Link
-            href="/admin/rag"
-            className="px-3 py-2 rounded-md text-gray-700 hover:bg-rose-50 hover:text-rose-600 transition-colors duration-300"
-            onClick={() => setIsOpen(false)}
-          >
-            RAG Ingestion
-          </Link>
-          <Link
             href="/login"
             className="px-3 py-2 rounded-md text-gray-700 hover:bg-rose-50 hover:text-rose-600 transition-colors duration-300"
             onClick={() => setIsOpen(false)}
           >
-            Login
+            Provider Portal
           </Link>
         </div>
       </div>
