@@ -213,9 +213,9 @@ DOMAIN AND SAFETY (MANDATORY):
       const scheduling = `
 SCHEDULING CAPABILITIES:
 - IMPORTANT: We use an INTERACTIVE scheduling flow with provider approval.
-- When users ask to schedule/book/see a doctor, use action='start_interactive_scheduling'.
-- If the user already provided a specific time (preferred_time), you may use action='process_time_selection'.
-- For "available times" / "availability" you may use action='check_availability'.
+- When users ask to schedule/book/see a doctor with a specific time, use action='start_interactive_scheduling' and immediately create the approval request. DO NOT check availability.
+- If user already provided a specific time (preferred_time), you may use action='process_time_selection' to create the approval request directly.
+- For "available times" / "availability" you may use action='check_availability' ONLY if no time was provided.
 - Include provider_name if specified, otherwise use any available provider.
 - Include preferred_time if mentioned (e.g., "tomorrow morning", "next week").
 - Include reason for appointment if mentioned.
@@ -335,17 +335,16 @@ Example:
         } else if ((action === 'start_interactive_scheduling' || action === 'schedule_meeting') && activePhone) {
           try {
             const patient = await getPatientByPhone(activePhone);
-            const result = await startSchedulingSession(
-              activePhone,
-              patient?.id || '',
-              providerName
-            );
-
-            // If the user already gave a time, immediately advance the flow
+            const providerName = typeof parsed.provider_name === 'string' ? parsed.provider_name : undefined;
+            
+            // If user provided a time, create approval request directly
             if (preferredTime) {
+              const result = await startSchedulingSession(activePhone, patient?.id || '', providerName);
               const followup = await processTimeSelection(result.session.id, activePhone, preferredTime, reason);
               answer = providedAnswer || followup;
             } else {
+              // No time provided - start session and ask for time
+              const result = await startSchedulingSession(activePhone, patient?.id || '', providerName);
               answer = providedAnswer || result.message;
             }
           } catch (e: any) {
