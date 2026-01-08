@@ -212,9 +212,10 @@ DOMAIN AND SAFETY (MANDATORY):
 
       const scheduling = `
 SCHEDULING CAPABILITIES:
-- When users ask to "schedule appointment", "book meeting", "see doctor", "consultation", or similar, use action='schedule_meeting'.
-- For "available times", "when can I see someone", "availability", use action='check_availability'.
-- For interactive scheduling with date/time selection, use action='start_interactive_scheduling'.
+- IMPORTANT: We use an INTERACTIVE scheduling flow with provider approval.
+- When users ask to schedule/book/see a doctor, use action='start_interactive_scheduling'.
+- If the user already provided a specific time (preferred_time), you may use action='process_time_selection'.
+- For "available times" / "availability" you may use action='check_availability'.
 - Include provider_name if specified, otherwise use any available provider.
 - Include preferred_time if mentioned (e.g., "tomorrow morning", "next week").
 - Include reason for appointment if mentioned.
@@ -228,7 +229,7 @@ If the user indicates ANC danger signs (any of: severe headache, blurred vision,
       const outputFormat = `
 OUTPUT FORMAT (MANDATORY):
 Return a single JSON object with keys:
-- action: 'answer' | 'escalate' | 'onboard_name' | 'schedule_meeting' | 'check_availability' | 'start_interactive_scheduling' | 'process_time_selection'
+- action: 'answer' | 'escalate' | 'onboard_name' | 'check_availability' | 'start_interactive_scheduling' | 'process_time_selection'
 - answer: string (message to send to the user, WhatsApp-friendly)
 - escalate_summary?: string (short summary if action is 'escalate')
 - name?: string (when action is 'onboard_name', the visitor name to save)
@@ -306,6 +307,10 @@ Example:
       if (parsed && typeof parsed === 'object') {
         const action = String(parsed.action || 'answer').toLowerCase();
         const providedAnswer = typeof parsed.answer === 'string' ? parsed.answer : '';
+        const activePhone = (patientScopedPhone || phoneE164) as string | undefined;
+        const providerName = typeof parsed.provider_name === 'string' ? parsed.provider_name : undefined;
+        const preferredTime = typeof parsed.preferred_time === 'string' ? parsed.preferred_time : undefined;
+        const reason = typeof parsed.reason === 'string' ? parsed.reason : undefined;
         if (action === 'escalate' && patientScopedPhone) {
           try {
             await createMedicalEscalation({ phoneE164: patientScopedPhone, summary: String(parsed.escalate_summary || msg).slice(0,180), subjectType: 'patient', subjectId: null });
@@ -327,34 +332,43 @@ Example:
           }
           // Send the provided answer or a friendly default
           answer = providedAnswer || "🌸 Thanks — noted! I'm Luna, your women's wellness assistant. I can help you schedule appointments, track cycles, provide health guidance, or connect with our community. What would you like help with today?";
-        } else if (action === 'start_interactive_scheduling' && (patientScopedPhone || phoneE164)) {
+        } else if ((action === 'start_interactive_scheduling' || action === 'schedule_meeting') && activePhone) {
           try {
-            const activePhone = (patientScopedPhone || phoneE164) as string;
             const patient = await getPatientByPhone(activePhone);
             const result = await startSchedulingSession(
               activePhone,
               patient?.id || '',
-              parsed.provider_name
+              providerName
             );
-            answer = providedAnswer || result.message;
+
+            // If the user already gave a time, immediately advance the flow
+            if (preferredTime) {
+              const followup = await processTimeSelection(result.session.id, activePhone, preferredTime, reason);
+              answer = providedAnswer || followup;
+            } else {
+              answer = providedAnswer || result.message;
+            }
           } catch (e: any) {
             console.error('[Agent->start_interactive_scheduling] error', e?.message || e);
             answer = "I'm having trouble starting the scheduling process. Please try again later.";
           }
-        } else if (action === 'process_time_selection' && (patientScopedPhone || phoneE164)) {
+        } else if (action === 'process_time_selection' && activePhone) {
           try {
-            const activePhone = (patientScopedPhone || phoneE164) as string;
             const message = await processTimeSelection(
               parsed.session_id || '',
               activePhone,
-              parsed.preferred_time || 'tomorrow at 2 PM',
-              parsed.reason
+              preferredTime || 'tomorrow at 2 PM',
+              reason
             );
             answer = providedAnswer || message;
           } catch (e: any) {
             console.error('[Agent->process_time_selection] error', e?.message || e);
             answer = "I'm having trouble scheduling your appointment. Please try again.";
           }
+        } else if (action === 'check_availability' && activePhone) {
+          // Keep this lightweight: direct user into the interactive flow.
+          // (We avoid claiming a meeting is created before provider approval.)
+          answer = providedAnswer || "I can help you schedule this. Tell me a preferred time (e.g., 'tomorrow at 2 PM'), and I'll send it to the provider for approval.";
         } else if (providerScopedPhone && (msg.toLowerCase().includes('confirm') || msg.toLowerCase().includes('decline') || msg.toLowerCase().includes('pending'))) {
           // Handle provider responses for meeting approvals
           try {
