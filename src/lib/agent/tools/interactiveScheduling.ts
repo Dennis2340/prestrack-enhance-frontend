@@ -4,6 +4,17 @@
 import prisma from '@/lib/prisma';
 import { createApprovalRequest } from './providerApproval';
 
+function hydrateSchedulingSession(session: any): SchedulingSession | null {
+  if (!session || typeof session !== 'object') return null;
+  if (!session.id) return null;
+
+  const hydrated: any = { ...session };
+  if (hydrated.createdAt && !(hydrated.createdAt instanceof Date)) hydrated.createdAt = new Date(hydrated.createdAt);
+  if (hydrated.expiresAt && !(hydrated.expiresAt instanceof Date)) hydrated.expiresAt = new Date(hydrated.expiresAt);
+  if (hydrated.selectedTime && !(hydrated.selectedTime instanceof Date)) hydrated.selectedTime = new Date(hydrated.selectedTime);
+  return hydrated as SchedulingSession;
+}
+
 async function ensurePatientIdForPhone(phoneE164: string): Promise<string> {
   const cc = await prisma.contactChannel.findFirst({
     where: { type: 'whatsapp', value: phoneE164, patientId: { not: null } },
@@ -43,9 +54,10 @@ async function getLatestSchedulingSessionByPhone(phoneE164: string): Promise<Sch
     if (!doc) return null;
 
     const md = doc.metadata as any;
-    const session = JSON.parse(md?.sessionData || '{}') as SchedulingSession;
-    if (!session?.id) return null;
-    if (new Date() > new Date(session.expiresAt)) return null;
+    const parsed = JSON.parse(md?.sessionData || '{}');
+    const session = hydrateSchedulingSession(parsed);
+    if (!session) return null;
+    if (new Date() > session.expiresAt) return null;
     return session;
   } catch {
     return null;
@@ -374,6 +386,13 @@ function parsePreferredTime(preferredTime: string): Date {
 
 // Session storage
 async function storeSchedulingSession(session: SchedulingSession) {
+  // Ensure Dates are real Dates (sessions may be hydrated from JSON)
+  (session as any).createdAt = session.createdAt instanceof Date ? session.createdAt : new Date(session.createdAt);
+  (session as any).expiresAt = session.expiresAt instanceof Date ? session.expiresAt : new Date(session.expiresAt);
+  if (session.selectedTime) {
+    (session as any).selectedTime = session.selectedTime instanceof Date ? session.selectedTime : new Date(session.selectedTime);
+  }
+
   // First check if document exists
   const existingDoc = await prisma.document.findFirst({
     where: { url: `scheduling_session_${session.id}` }
@@ -435,15 +454,9 @@ async function getSchedulingSession(sessionId: string): Promise<SchedulingSessio
     
     if (!doc) return null;
     
-    const sessionData = doc.metadata as any;
-    const session = JSON.parse(sessionData.sessionData || '{}') as SchedulingSession;
-    
-    // Check if expired
-    if (new Date() > new Date(session.expiresAt)) {
-      return null;
-    }
-    
-    return session;
+    const metadata = doc.metadata as any;
+    const parsed = JSON.parse(metadata.sessionData);
+    return hydrateSchedulingSession(parsed);
   } catch {
     return null;
   }

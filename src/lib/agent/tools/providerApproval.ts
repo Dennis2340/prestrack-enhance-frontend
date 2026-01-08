@@ -5,6 +5,14 @@ import prisma from '@/lib/prisma';
 import { sendWhatsAppViaGateway } from '@/lib/whatsapp';
 import { createHOAMeeting, GoogleMeetResponse } from '@/lib/googleMeetApi';
 
+function hydratePendingMeetingRequest(req: any): PendingMeetingRequest {
+  const hydrated: any = { ...(req || {}) };
+  if (hydrated.requestedTime && !(hydrated.requestedTime instanceof Date)) hydrated.requestedTime = new Date(hydrated.requestedTime);
+  if (hydrated.createdAt && !(hydrated.createdAt instanceof Date)) hydrated.createdAt = new Date(hydrated.createdAt);
+  if (hydrated.expiresAt && !(hydrated.expiresAt instanceof Date)) hydrated.expiresAt = new Date(hydrated.expiresAt);
+  return hydrated as PendingMeetingRequest;
+}
+
 async function ensurePatientIdForPhone(phoneE164: string): Promise<string> {
   const cc = await prisma.contactChannel.findFirst({
     where: { type: 'whatsapp', value: phoneE164, patientId: { not: null } },
@@ -140,7 +148,7 @@ export async function processProviderResponse(
       return { success: false, message: 'Approval request not found' };
     }
 
-    const approvalRequest = document.metadata as unknown as PendingMeetingRequest;
+    const approvalRequest = hydratePendingMeetingRequest(document.metadata as any);
 
     // Verify provider phone matches
     if (approvalRequest.providerPhone !== providerPhone) {
@@ -234,7 +242,7 @@ export async function getPendingRequests(providerPhone: string): Promise<Pending
     });
 
     return documents
-      .map(doc => doc.metadata as unknown as PendingMeetingRequest)
+      .map(doc => hydratePendingMeetingRequest(doc.metadata as any))
       .filter(request => 
         request.providerPhone === providerPhone &&
         request.status === 'pending' && 
