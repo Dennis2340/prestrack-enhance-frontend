@@ -79,8 +79,8 @@ export async function agentRespond(opts: {
   // If no message text (e.g., media-only), avoid RAG/LLM and return a friendly default
   if (!msg) {
     const answer = opts.whatsappStyle
-      ? formatWhatsApp("How can I help you today? If you sent a file, a provider will review it shortly.")
-      : "How can I help you today?";
+      ? formatWhatsApp("🌸 Welcome to HOA! I'm Luna, your women's wellness assistant. I can help you:\n\n• Schedule appointments with healthcare providers\n• Track menstrual cycles and symptoms\n• Get personalized health guidance\n• Connect with our supportive community\n• Answer your health questions\n\nWhat would you like help with today? If you sent a file, a provider will review it shortly.")
+      : "🌸 Welcome to HOA! I'm Luna, your women's wellness assistant. I can help you schedule appointments, track menstrual cycles, provide health guidance, connect with community support, and answer your health questions. What would you like help with today?";
     return { answer, matches: [], billable: false };
   }
 
@@ -330,7 +330,7 @@ Example:
             } catch {}
           }
           // Send the provided answer or a friendly default
-          answer = providedAnswer || "Thanks — noted. How can I help you today?";
+          answer = providedAnswer || "🌸 Thanks — noted! I'm Luna, your women's wellness assistant. I can help you schedule appointments, track cycles, provide health guidance, or connect with our community. What would you like help with today?";
         } else if (action === 'start_interactive_scheduling' && patientScopedPhone) {
           try {
             const patient = await getPatientByPhone(patientScopedPhone);
