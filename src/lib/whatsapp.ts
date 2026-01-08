@@ -28,7 +28,11 @@ export async function sendWhatsAppViaGateway({ toE164, body }: SendWhatsAppViaGa
   const res = await fetch(`${base}/send-whatsapp`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ phoneE164: toE164, message: body }),
+    body: JSON.stringify({ 
+      phoneE164: toE164, 
+      message: body,
+      lid: "default" // Add required lid parameter for WhatsApp chat table
+    }),
   });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
