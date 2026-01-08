@@ -342,7 +342,7 @@ async function storeSchedulingSession(session: SchedulingSession) {
       }
     });
   } else {
-    // Create new - only include patientId if it exists and is valid
+    // Create new - only include patient relation if it's a valid patient ID
     const createData: any = {
       url: `scheduling_session_${session.id}`,
       filename: `session_${session.id}.json`,
@@ -356,9 +356,13 @@ async function storeSchedulingSession(session: SchedulingSession) {
       }
     };
     
-    // Only add patientId if it's a valid patient ID
+    // Only add patient relation if it's a valid patient ID
     if (session.patientId && session.patientId !== '') {
-      createData.patientId = session.patientId;
+      createData.patient = {
+        connect: {
+          id: session.patientId
+        }
+      };
     }
     
     await prisma.document.create({
