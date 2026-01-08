@@ -213,17 +213,32 @@ export async function inviteProvider(params: InviteProviderParams) {
     },
   });
 
-  await sendWhatsAppViaGateway({ toE164: phoneE164, body: welcome });
+  let whatsappOk = true;
+  let whatsappError: string | null = null;
+  try {
+    await sendWhatsAppViaGateway({ toE164: phoneE164, body: welcome });
+  } catch (e: any) {
+    whatsappOk = false;
+    whatsappError = e?.message || 'Failed to send WhatsApp invite';
+    console.error('[inviteProvider] WhatsApp send failed:', whatsappError);
+  }
   const convo = await ensureVisitorConversation(visitor.id);
   const saved = await prisma.commMessage.create({
     data: {
       conversationId: convo.id,
       direction: "outbound",
       via: "whatsapp",
-      body: welcome,
+      body: whatsappOk ? welcome : `${welcome}\n\n[NOTICE] WhatsApp invite failed to send. Please message the provider manually or try again later.`,
       senderType: "system",
     },
   });
 
-  return { userId: user.id, providerVisitorId: visitor.id, conversationId: convo.id, messageId: saved.id, email };
+  return {
+    userId: user.id,
+    providerVisitorId: visitor.id,
+    conversationId: convo.id,
+    messageId: saved.id,
+    email,
+    whatsapp: { ok: whatsappOk, error: whatsappError },
+  };
 }

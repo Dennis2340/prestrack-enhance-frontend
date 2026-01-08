@@ -90,41 +90,62 @@ export async function createApprovalRequest(input: ApprovalRequestInput): Promis
     expiresAt: expiresAt,
   };
 
-  try {
-    const patientIdForDoc = await ensurePatientIdForPhone(input.patientPhone);
+  const patientIdForDoc = await ensurePatientIdForPhone(input.patientPhone);
 
-    // Store in database using Document model
-    await prisma.document.create({
+  // Persist first (never lose the request even if WhatsApp gateway is down)
+  const createdDoc = await prisma.document.create({
+    data: {
+      typeCode: 'meeting_approval',
+      url: requestId,
+      filename: requestId,
+      contentType: 'application/json',
+      patientId: patientIdForDoc,
+      metadata: approvalRequest as any,
+    },
+    select: { id: true },
+  });
+
+  // Send WhatsApp notifications (best-effort)
+  let providerSendOk = true;
+  let patientSendOk = true;
+  let providerSendError: string | null = null;
+  let patientSendError: string | null = null;
+  try {
+    const providerMessage = formatProviderApprovalMessage(approvalRequest);
+    await sendWhatsAppViaGateway({ toE164: input.providerPhone, body: providerMessage });
+  } catch (e: any) {
+    providerSendOk = false;
+    providerSendError = e?.message || 'Failed to send provider approval message';
+    console.error('[Create Approval Request] Provider WhatsApp send failed:', providerSendError);
+  }
+  try {
+    const patientMessage = formatPatientAcknowledgmentMessage(approvalRequest);
+    await sendWhatsAppViaGateway({ toE164: input.patientPhone, body: patientMessage });
+  } catch (e: any) {
+    patientSendOk = false;
+    patientSendError = e?.message || 'Failed to send patient acknowledgment';
+    console.error('[Create Approval Request] Patient WhatsApp send failed:', patientSendError);
+  }
+
+  // Record send outcome for debugging/admin UI
+  try {
+    await prisma.document.update({
+      where: { id: createdDoc.id },
       data: {
-        typeCode: 'meeting_approval',
-        url: requestId,
-        filename: requestId, // Using requestId as filename since it's required
-        contentType: 'application/json',
-        patientId: patientIdForDoc,
-        metadata: approvalRequest as any, // Cast to any for Prisma JSON compatibility
+        metadata: {
+          ...(approvalRequest as any),
+          delivery: {
+            provider: { ok: providerSendOk, error: providerSendError },
+            patient: { ok: patientSendOk, error: patientSendError },
+          },
+        } as any,
       },
     });
-
-    // Send WhatsApp message to provider
-    const providerMessage = formatProviderApprovalMessage(approvalRequest);
-    await sendWhatsAppViaGateway({
-      toE164: input.providerPhone,
-      body: providerMessage,
-    });
-
-    // Send acknowledgment to patient
-    const patientMessage = formatPatientAcknowledgmentMessage(approvalRequest);
-    await sendWhatsAppViaGateway({
-      toE164: input.patientPhone,
-      body: patientMessage,
-    });
-
-    return approvalRequest;
-
-  } catch (error) {
-    console.error('[Create Approval Request] Error:', error);
-    throw new Error('Failed to create approval request');
+  } catch {
+    // ignore
   }
+
+  return approvalRequest;
 }
 
 /**
