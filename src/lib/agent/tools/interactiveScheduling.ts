@@ -356,8 +356,8 @@ async function storeSchedulingSession(session: SchedulingSession) {
       }
     };
     
-    // Only add patient relation if it's a valid patient ID
-    if (session.patientId && session.patientId !== '') {
+    // Only add patient relation if it's a valid, non-empty patient ID
+    if (session.patientId && session.patientId !== '' && session.patientId.length > 0) {
       createData.patient = {
         connect: {
           id: session.patientId
