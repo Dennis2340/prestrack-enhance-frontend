@@ -7,8 +7,8 @@ import { fetchPatientContextByPhone } from "./tools/patientContext";
 import { scheduleMeeting, getAvailableSlots, handleProviderResponse } from "./tools/scheduling";
 import { 
   startSchedulingSession, 
-  processDateSelection, 
-  processTimeSlotSelection 
+
+  processTimeSelection 
 } from "./tools/interactiveScheduling";
 import prisma from "@/lib/prisma";
 
@@ -339,37 +339,6 @@ Example:
               patient?.id || '',
               parsed.provider_name
             );
-            answer = providedAnswer || "I've sent you available dates to choose from! Please check your WhatsApp and select the dates that work for you.";
-          } catch (e: any) {
-            console.error('[Agent->start_interactive_scheduling] error', e?.message || e);
-            answer = "I'm having trouble starting the scheduling process. Please try again later.";
-          }
-        } else if (action === 'process_date_selection' && patientScopedPhone) {
-          try {
-            await processDateSelection(
-              parsed.session_id || '',
-              patientScopedPhone,
-              parsed.selected_dates || []
-            );
-            answer = providedAnswer || "Great! I'm checking available time slots for your selected dates.";
-          } catch (e: any) {
-            console.error('[Agent->process_date_selection] error', e?.message || e);
-            answer = "I'm having trouble processing your date selection. Please try again.";
-          }
-        } else if (action === 'process_time_selection' && patientScopedPhone) {
-          try {
-            await processTimeSlotSelection(
-              parsed.session_id || '',
-              patientScopedPhone,
-              parsed.time_slot_index || 1
-            );
-            answer = providedAnswer || "Perfect! Your appointment has been scheduled. Check your WhatsApp for the meeting link.";
-          } catch (e: any) {
-            console.error('[Agent->process_time_selection] error', e?.message || e);
-            answer = "I'm having trouble scheduling your appointment. Please try again.";
-          }
-        } else if (action === 'schedule_meeting' && patientScopedPhone) {
-          try {
             await scheduleMeeting({
               phoneE164: patientScopedPhone,
               providerName: parsed.provider_name,

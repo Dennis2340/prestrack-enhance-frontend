@@ -1,33 +1,21 @@
 // Interactive Meeting Scheduling Flow for HOA
-// Patients check availability boxes → System generates meeting links → Links shared with doctor & patient
+// Patients select time → Provider approval → Google Meet event creation
 
 import prisma from '@/lib/prisma';
-import { getCalendlyClient, formatCalendlyDate } from '@/lib/calendly';
 import { sendWhatsAppViaGateway } from '@/lib/whatsapp';
+import { isGoogleMeetConfigured } from '@/lib/googleMeetApi';
+import { createApprovalRequest, getPendingRequests } from './providerApproval';
 
 export type SchedulingSession = {
   id: string;
   patientId: string;
   providerId: string;
-  status: 'selecting_dates' | 'selecting_times' | 'confirming' | 'completed';
-  selectedDates: string[];
-  selectedTimeSlot?: {
-    date: string;
-    time: string;
-    providerUri: string;
-  };
+  status: 'selecting_time' | 'awaiting_approval' | 'completed';
+  selectedTime?: Date;
+  reason?: string;
   meetingLink?: string;
   createdAt: Date;
   expiresAt: Date;
-};
-
-export type AvailabilityBox = {
-  date: string;
-  timeSlots: Array<{
-    time: string;
-    available: boolean;
-    providerUri: string;
-  }>;
 };
 
 // Start interactive scheduling session
@@ -48,360 +36,317 @@ export async function startSchedulingSession(
     id: sessionId,
     patientId,
     providerId: provider.id,
-    status: 'selecting_dates',
-    selectedDates: [],
+    status: 'selecting_time',
     createdAt: new Date(),
     expiresAt: new Date(Date.now() + 30 * 60 * 1000), // 30 minutes
   };
 
-  // Store session (you could use Redis or database)
+  // Store session
   await storeSchedulingSession(session);
 
-  // Send availability boxes to patient
-  await sendAvailabilityBoxes(phoneE164, provider, session);
+  // Send time selection message
+  await sendTimeSelectionMessage(phoneE164, provider, session);
 
   return session;
 }
 
-// Send availability boxes (date selection)
-export async function sendAvailabilityBoxes(
+// Send time selection message
+async function sendTimeSelectionMessage(
   phoneE164: string,
   provider: any,
   session: SchedulingSession
 ) {
-  const calendly = getCalendlyClient();
-  
-  // Get next 7 days of availability
-  const availabilityBoxes: AvailabilityBox[] = [];
-  const today = new Date();
-  
-  for (let i = 0; i < 7; i++) {
-    const checkDate = new Date(today);
-    checkDate.setDate(today.getDate() + i);
-    
-    try {
-      const timeSlots = await getProviderTimeSlots(
-        calendly,
-        provider.calendlyUserUri || provider.uri,
-        checkDate
-      );
-      
-      availabilityBoxes.push({
-        date: checkDate.toISOString().split('T')[0], // YYYY-MM-DD
-        timeSlots: timeSlots.map(slot => ({
-          time: slot.time,
-          available: slot.available,
-          providerUri: slot.providerUri
-        }))
-      });
-    } catch (error) {
-      console.error(`[Availability] Error for ${checkDate}:`, error);
-    }
-  }
+  const message = `📅 *Schedule Your Appointment*
 
-  // Format WhatsApp message with checkboxes
-  const message = formatAvailabilityBoxesMessage(availabilityBoxes, provider.name, session.id);
-  
-  await sendWhatsAppViaGateway({ 
-    toE164: phoneE164, 
-    body: message 
-  });
-}
-
-// Process patient's date selection
-export async function processDateSelection(
-  sessionId: string,
-  phoneE164: string,
-  selectedDates: string[]
-): Promise<void> {
-  const session = await getSchedulingSession(sessionId);
-  if (!session || session.status !== 'selecting_dates') {
-    throw new Error('Invalid or expired session');
-  }
-
-  session.selectedDates = selectedDates;
-  session.status = 'selecting_times';
-  await storeSchedulingSession(session);
-
-  // Send time slots for selected dates
-  await sendTimeSlotsForDates(phoneE164, session);
-}
-
-// Send time slots for selected dates
-export async function sendTimeSlotsForDates(
-  phoneE164: string,
-  session: SchedulingSession
-) {
-  const calendly = getCalendlyClient();
-  const provider = await findProviderById(session.providerId);
-  
-  let timeSlotsMessage = `⏰ *Available Time Slots*\n\n`;
-  
-  for (const date of session.selectedDates) {
-    const dateObj = new Date(date);
-    const dateStr = dateObj.toLocaleDateString('en-US', { 
-      weekday: 'long', 
-      month: 'long', 
-      day: 'numeric' 
-    });
-    
-    timeSlotsMessage += `📅 *${dateStr}*\n`;
-    
-    try {
-      const timeSlots = await getProviderTimeSlots(
-        calendly,
-        provider.calendlyUserUri || provider.uri,
-        dateObj
-      );
-      
-      const availableSlots = timeSlots.filter(slot => slot.available);
-      
-      if (availableSlots.length === 0) {
-        timeSlotsMessage += `❌ No available slots\n\n`;
-      } else {
-        availableSlots.forEach((slot, index) => {
-          timeSlotsMessage += `${index + 1}. ${slot.time}\n`;
-        });
-        timeSlotsMessage += '\n';
-      }
-    } catch (error) {
-      timeSlotsMessage += `❌ Error checking availability\n\n`;
-    }
-  }
-  
-  timeSlotsMessage += `💡 *Reply with your preferred time slot number*\n\nExample: "I want slot 2"\n\nOr reply "back" to select different dates.`;
-
-  await sendWhatsAppViaGateway({ 
-    toE164: phoneE164, 
-    body: timeSlotsMessage 
-  });
-}
-
-// Process time slot selection and create meeting
-export async function processTimeSlotSelection(
-  sessionId: string,
-  phoneE164: string,
-  timeSlotIndex: number
-): Promise<void> {
-  const session = await getSchedulingSession(sessionId);
-  if (!session || session.status !== 'selecting_times') {
-    throw new Error('Invalid or expired session');
-  }
-
-  const calendly = getCalendlyClient();
-  const provider = await findProviderById(session.providerId);
-  
-  // Find the selected time slot
-  const selectedDate = session.selectedDates[0]; // For simplicity, use first selected date
-  const timeSlots = await getProviderTimeSlots(
-    calendly,
-    provider.calendlyUserUri || provider.uri,
-    new Date(selectedDate)
-  );
-  
-  const selectedSlot = timeSlots.filter(slot => slot.available)[timeSlotIndex - 1];
-  
-  if (!selectedSlot) {
-    throw new Error('Invalid time slot selection');
-  }
-
-  // Create the meeting link
-  const schedulingLink = await calendly.createSchedulingLink({
-    max_event_count: 1,
-    owner: selectedSlot.providerUri,
-    owner_type: 'users',
-  });
-
-  // Update session
-  session.selectedTimeSlot = {
-    date: selectedDate,
-    time: selectedSlot.time,
-    providerUri: selectedSlot.providerUri
-  };
-  session.meetingLink = schedulingLink.url;
-  session.status = 'completed';
-  await storeSchedulingSession(session);
-
-  // Send confirmation with meeting link
-  await sendMeetingConfirmation(phoneE164, session, provider, schedulingLink);
-}
-
-// Send meeting confirmation
-async function sendMeetingConfirmation(
-  phoneE164: string,
-  session: SchedulingSession,
-  provider: any,
-  schedulingLink: any
-) {
-  const confirmationMessage = `✅ *Appointment Scheduled!*
-
-🗓️ *Date:* ${new Date(session.selectedTimeSlot!.date).toLocaleDateString('en-US', {
-    weekday: 'long',
-    month: 'long',
-    day: 'numeric'
-  })}
-⏰ *Time:* ${session.selectedTimeSlot!.time}
 👩‍⚕️ *Provider:* ${provider.name}
+📱 *Meeting Type:* Google Meet (provider approval required)
 
-📱 *Meeting Link:* ${schedulingLink.url}
+🔗 **How it works:**
+• Tell me when you'd like to meet
+• I'll send your request to ${provider.name}
+• Provider will confirm via WhatsApp
+• Once approved, I'll create the Google Meet event
+• You'll receive the calendar invitation and Meet link
 
-🔗 *Share this link with your provider*
-The same link has been sent to ${provider.name} for their records.
+💡 *Examples:*
+• "tomorrow at 2 PM"
+• "today at 3:30 PM" 
+• "next Monday at 10 AM"
 
-⚠️ *Important:* 
-- This link is valid for one booking only
-- Please save the link for your appointment
-- You'll receive reminders before the appointment
-
-Need to reschedule? Just reply "reschedule" anytime!
+📋 *Reply with your preferred time*
+This session expires in 30 minutes
 
 With care,
 Luna ✨`;
 
   await sendWhatsAppViaGateway({ 
     toE164: phoneE164, 
-    body: confirmationMessage 
+    body: message 
+  });
+}
+
+// Process time selection and create approval request
+export async function processTimeSelection(
+  sessionId: string,
+  phoneE164: string,
+  preferredTime: string,
+  reason?: string
+): Promise<void> {
+  const session = await getSchedulingSession(sessionId);
+  if (!session || session.status !== 'selecting_time') {
+    throw new Error('Invalid or expired session');
+  }
+
+  const provider = await findProviderById(session.providerId);
+  if (!provider) {
+    throw new Error('Provider not found');
+  }
+
+  // Parse the requested time
+  const requestedTime = parsePreferredTime(preferredTime);
+
+  // Update session
+  session.selectedTime = requestedTime;
+  session.reason = reason;
+  session.status = 'awaiting_approval';
+  await storeSchedulingSession(session);
+
+  // Create approval request
+  await createApprovalRequest({
+    patientPhone: phoneE164,
+    patientName: await getPatientName(session.patientId),
+    providerId: provider.id,
+    providerName: provider.name,
+    providerPhone: provider.phoneE164,
+    providerEmail: provider.email,
+    requestedTime: requestedTime,
+    reason: reason,
   });
 
-  // Also notify the provider
-  await notifyProvider(provider, session, schedulingLink);
+  // Send confirmation to patient
+  await sendApprovalRequestConfirmation(phoneE164, provider, requestedTime);
 }
 
-// Notify provider about the scheduled meeting
-async function notifyProvider(
+// Send approval request confirmation to patient
+async function sendApprovalRequestConfirmation(
+  phoneE164: string,
   provider: any,
-  session: SchedulingSession,
-  schedulingLink: any
+  requestedTime: Date
 ) {
-  const providerMessage = `📋 *New Appointment Scheduled*
+  const message = `✅ *Meeting Request Sent*
 
-👤 *Patient:* HOA Patient
-📅 *Date:* ${new Date(session.selectedTimeSlot!.date).toLocaleDateString()}
-⏰ *Time:* ${session.selectedTimeSlot!.time}
-🔗 *Meeting Link:* ${schedulingLink.url}
+👩‍⚕️ *Provider:* ${provider.name}
+📅 *Requested Time:* ${requestedTime.toLocaleString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true
+  })}
 
-The patient has received the scheduling link and can join the meeting.
+🔗 **Next Steps:**
+• Your request has been sent to ${provider.name}
+• Provider will review and confirm via WhatsApp
+• Once approved, you'll receive Google Meet link
+• You'll get calendar invitation automatically
 
-Please update your calendar accordingly.
+⏰ *Response Time:* Usually within a few hours
 
-HOA Wellness Hub 🌸`;
+Need to make changes? Reply "reschedule" anytime!
 
-  // Send to provider if they have WhatsApp
-  if (provider.phoneE164) {
-    await sendWhatsAppViaGateway({ 
-      toE164: provider.phoneE164, 
-      body: providerMessage 
-    });
-  }
-}
+With care,
+Luna ✨`;
 
-interface ProviderWithCalendlyForScheduling {
-  id: string;
-  userId: string;
-  phoneE164: string;
-  notifyMedication: boolean;
-  notifyEscalation: boolean;
-  notificationCooldownMinutes: number;
-  user: {
-    name: string;
-    email: string;
-  };
-  calendlyUserUri?: string;
-  uri?: string;
-  name?: string;
-  email?: string;
+  await sendWhatsAppViaGateway({ 
+    toE164: phoneE164, 
+    body: message 
+  });
 }
 
 // Helper functions
-async function findProviderForScheduling(providerName?: string): Promise<ProviderWithCalendlyForScheduling | null> {
-  const whereClause = providerName 
-    ? { user: { name: { contains: providerName, mode: 'insensitive' as const } } }
-    : {};
-
-  return await prisma.providerProfile.findFirst({
-    where: whereClause,
-    include: {
-      user: { select: { name: true, email: true } }
-    },
-    orderBy: { user: { name: 'asc' } }
-  });
-}
-
-async function findProviderById(providerId: string): Promise<ProviderWithCalendlyForScheduling | null> {
-  return await prisma.providerProfile.findFirst({
-    where: { id: providerId },
-    include: {
-      user: { select: { name: true, email: true } }
-    }
-  });
-}
-
-async function getProviderTimeSlots(
-  calendly: any,
-  providerUri: string,
-  date: Date
-) {
-  const startTime = formatCalendlyDate(new Date(date.setHours(9, 0, 0, 0)));
-  const endTime = formatCalendlyDate(new Date(date.setHours(17, 0, 0, 0)));
-  
+async function findProviderForScheduling(providerName?: string): Promise<any> {
   try {
-    const availableTimes = await calendly.getAvailableTimeSlots(
-      providerUri,
-      startTime,
-      endTime
-    );
-    
-    // Format into time slots
-    return availableTimes.map((slot: any) => ({
-      time: new Date(slot.start_time).toLocaleTimeString('en-US', {
-        hour: 'numeric',
-        minute: '2-digit',
-        hour12: true
-      }),
-      available: true,
-      providerUri: slot.user || providerUri
-    }));
+    const whereClause = providerName 
+      ? { user: { name: { contains: providerName, mode: 'insensitive' as const } } }
+      : {};
+
+    const provider = await prisma.providerProfile.findFirst({
+      where: whereClause,
+      include: {
+        user: true
+      },
+      orderBy: { user: { name: 'asc' } }
+    });
+
+    if (!provider) {
+      // Get any provider as fallback
+      const fallbackProvider = await prisma.providerProfile.findFirst({
+        include: {
+          user: true
+        }
+      });
+      
+      if (!fallbackProvider) {
+        return null;
+      }
+
+      return {
+        ...fallbackProvider,
+        name: fallbackProvider.user.name,
+        email: fallbackProvider.user.email,
+      };
+    }
+
+    return {
+      ...provider,
+      name: provider.user.name,
+      email: provider.user.email,
+    };
   } catch (error) {
-    console.error('[Time Slots] Error:', error);
-    return [];
+    console.error('[Find Provider] Error:', error);
+    return null;
   }
 }
 
-function formatAvailabilityBoxesMessage(
-  boxes: AvailabilityBox[],
-  providerName: string,
-  sessionId: string
-): string {
-  let message = `📅 *Select Available Dates*\n\n`;
-  message += `👩‍⚕️ *Provider:* ${providerName}\n\n`;
-  message += `📋 *Check the boxes for dates that work for you:*\n\n`;
-  
-  boxes.forEach((box, index) => {
-    const dateObj = new Date(box.date);
-    const dateStr = dateObj.toLocaleDateString('en-US', { 
-      weekday: 'short', 
-      month: 'short', 
-      day: 'numeric' 
+async function findProviderById(providerId: string): Promise<any> {
+  try {
+    const provider = await prisma.providerProfile.findFirst({
+      where: { id: providerId },
+      include: {
+        user: true
+      }
     });
-    
-    const hasSlots = box.timeSlots.some(slot => slot.available);
-    const status = hasSlots ? '✅' : '❌';
-    
-    message += `${index + 1}. ${status} ${dateStr}\n`;
-  });
-  
-  message += `\n💡 *Reply with the numbers of your preferred dates*\n`;
-  message += `Example: "1, 3, 5" or "I want dates 1 and 3"\n\n`;
-  message += `📱 This session expires in 30 minutes`;
-  
-  return message;
+
+    if (!provider) {
+      return null;
+    }
+
+    return {
+      ...provider,
+      name: provider.user.name,
+      email: provider.user.email,
+    };
+  } catch (error) {
+    console.error('[Find Provider By ID] Error:', error);
+    return null;
+  }
 }
 
-// Session storage (you could replace with Redis)
+async function getPatientName(patientId: string): Promise<string> {
+  try {
+    const patient = await prisma.patient.findUnique({
+      where: { id: patientId },
+      select: { firstName: true, lastName: true }
+    });
+    
+    if (patient) {
+      return `${patient.firstName || ''} ${patient.lastName || ''}`.trim() || 'Patient';
+    }
+    
+    return 'Patient';
+  } catch {
+    return 'Patient';
+  }
+}
+
+// Parse preferred time string into Date
+function parsePreferredTime(preferredTime: string): Date {
+  const now = new Date();
+  const timeLower = preferredTime.toLowerCase();
+
+  // Handle common time expressions
+  if (timeLower.includes('tomorrow')) {
+    const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    
+    // Extract time if provided
+    const timeMatch = preferredTime.match(/(\d{1,2})\s*(:\s*\d{2})?\s*(am|pm)/i);
+    if (timeMatch) {
+      const hours = parseInt(timeMatch[1]);
+      const minutes = timeMatch[2] ? parseInt(timeMatch[2].replace(':', '')) : 0;
+      const period = timeMatch[3].toLowerCase();
+      
+      tomorrow.setHours(
+        period === 'pm' && hours !== 12 ? hours + 12 : hours,
+        minutes,
+        0,
+        0
+      );
+    } else {
+      tomorrow.setHours(14, 0, 0, 0); // Default 2 PM
+    }
+    
+    return tomorrow;
+  }
+
+  if (timeLower.includes('today')) {
+    const today = new Date();
+    
+    const timeMatch = preferredTime.match(/(\d{1,2})\s*(:\s*\d{2})?\s*(am|pm)/i);
+    if (timeMatch) {
+      const hours = parseInt(timeMatch[1]);
+      const minutes = timeMatch[2] ? parseInt(timeMatch[2].replace(':', '')) : 0;
+      const period = timeMatch[3].toLowerCase();
+      
+      today.setHours(
+        period === 'pm' && hours !== 12 ? hours + 12 : hours,
+        minutes,
+        0,
+        0
+      );
+    } else {
+      today.setHours(14, 0, 0, 0); // Default 2 PM
+    }
+    
+    return today;
+  }
+
+  // Handle "next [day]" expressions
+  const dayMatch = preferredTime.match(/next\s+(\w+)/i);
+  if (dayMatch) {
+    const dayName = dayMatch[1].toLowerCase();
+    const daysOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+    const targetDay = daysOfWeek.indexOf(dayName);
+    
+    if (targetDay !== -1) {
+      const nextDate = new Date(now);
+      const currentDay = now.getDay();
+      let daysUntilTarget = targetDay - currentDay;
+      
+      if (daysUntilTarget <= 0) {
+        daysUntilTarget += 7; // Next week
+      }
+      
+      nextDate.setDate(now.getDate() + daysUntilTarget);
+      
+      const timeMatch = preferredTime.match(/(\d{1,2})\s*(:\s*\d{2})?\s*(am|pm)/i);
+      if (timeMatch) {
+        const hours = parseInt(timeMatch[1]);
+        const minutes = timeMatch[2] ? parseInt(timeMatch[2].replace(':', '')) : 0;
+        const period = timeMatch[3].toLowerCase();
+        
+        nextDate.setHours(
+          period === 'pm' && hours !== 12 ? hours + 12 : hours,
+          minutes,
+          0,
+          0
+        );
+      } else {
+        nextDate.setHours(14, 0, 0, 0); // Default 2 PM
+      }
+      
+      return nextDate;
+    }
+  }
+
+  // Default to tomorrow at 2 PM if parsing fails
+  const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+  tomorrow.setHours(14, 0, 0, 0);
+  return tomorrow;
+}
+
+// Session storage
 async function storeSchedulingSession(session: SchedulingSession) {
-  // For now, store in memory or database
-  // In production, use Redis with TTL
-  
   // First check if document exists
   const existingDoc = await prisma.document.findFirst({
     where: { url: `scheduling_session_${session.id}` }
