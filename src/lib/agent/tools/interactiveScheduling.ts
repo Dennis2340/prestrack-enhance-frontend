@@ -342,21 +342,27 @@ async function storeSchedulingSession(session: SchedulingSession) {
       }
     });
   } else {
-    // Create new
-    await prisma.document.create({
-      data: {
-        url: `scheduling_session_${session.id}`,
-        filename: `session_${session.id}.json`,
-        contentType: 'application/json',
-        title: 'Scheduling Session',
-        typeCode: 'scheduling_session',
-        patientId: session.patientId,
-        metadata: {
-          sessionId: session.id,
-          sessionData: JSON.stringify(session),
-          expiresAt: session.expiresAt.toISOString()
-        }
+    // Create new - only include patientId if it exists and is valid
+    const createData: any = {
+      url: `scheduling_session_${session.id}`,
+      filename: `session_${session.id}.json`,
+      contentType: 'application/json',
+      title: 'Scheduling Session',
+      typeCode: 'scheduling_session',
+      metadata: {
+        sessionId: session.id,
+        sessionData: JSON.stringify(session),
+        expiresAt: session.expiresAt.toISOString()
       }
+    };
+    
+    // Only add patientId if it's a valid patient ID
+    if (session.patientId && session.patientId !== '') {
+      createData.patientId = session.patientId;
+    }
+    
+    await prisma.document.create({
+      data: createData
     });
   }
 }
