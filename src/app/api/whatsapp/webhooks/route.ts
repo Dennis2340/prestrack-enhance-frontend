@@ -237,6 +237,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ status: 'ok', answer: final })
   } catch (err: any) {
+    console.log(err)
     console.error('[whatsapp webhook] error', err?.message || err)
     return NextResponse.json({ status: 'ok', answer: 'Please try again in a moment.' })
   }
