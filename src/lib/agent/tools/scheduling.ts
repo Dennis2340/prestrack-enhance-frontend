@@ -2,6 +2,9 @@
 import prisma from '@/lib/prisma';
 import { getCalendlyClient, isCalendlyConfigured, formatCalendlyDate, CalendlySchedulingLink } from '@/lib/calendly';
 import { sendWhatsAppViaGateway } from '@/lib/whatsapp';
+import GoogleMeetGenerator, { GoogleMeetLink } from '@/lib/googleMeet';
+import { getGoogleMeetAPI, isGoogleMeetConfigured, createHOAMeeting, GoogleMeetResponse } from '@/lib/googleMeetApi';
+import { createApprovalRequest, processProviderResponse, getPendingRequests, ApprovalRequestInput } from './providerApproval';
 
 export type ScheduleMeetingInput = {
   phoneE164: string;
@@ -25,10 +28,6 @@ export async function scheduleMeeting(input: ScheduleMeetingInput) {
     throw new Error('Invalid phone number format');
   }
 
-  if (!isCalendlyConfigured()) {
-    throw new Error('Meeting scheduling is not available at the moment');
-  }
-
   try {
     // Get patient/visitor info
     const displayName = await getDisplayName(input.phoneE164, input.subjectType, input.subjectId);
@@ -40,76 +39,39 @@ export async function scheduleMeeting(input: ScheduleMeetingInput) {
       throw new Error('No healthcare provider available for scheduling');
     }
 
-    // Create a single-use scheduling link
-    const calendly = getCalendlyClient();
-    const schedulingLink = await calendly.createSchedulingLink({
-      max_event_count: 1,
-      owner: provider.calendlyUserUri || provider.uri,
-      owner_type: 'users',
-    });
+    // Parse the requested time
+    const requestedTime = parsePreferredTime(input.preferredTime);
 
-    // Log the scheduling request
-    await logSchedulingRequest(input, schedulingLink, displayName, provider);
+    // Create approval request instead of instant meeting
+    const approvalInput: ApprovalRequestInput = {
+      patientPhone: input.phoneE164,
+      patientName: displayName,
+      providerId: provider.id,
+      providerName: provider.name,
+      providerPhone: provider.phoneE164,
+      providerEmail: provider.email,
+      requestedTime: requestedTime,
+      reason: input.reason,
+    };
 
-    // Send WhatsApp message with scheduling link
-    const message = `🗓️ *Meeting Scheduling Request*
-
-Hello ${displayName}! 
-
-I've arranged a scheduling link for your consultation:
-
-📅 *Click here to book your appointment:*
-${schedulingLink.url}
-
-${input.reason ? `*Reason:* ${input.reason}` : ''}
-
-This link is valid for one booking only. If you need assistance, just reply here!
-
-With care,
-Luna ✨`;
-
-    await sendWhatsAppViaGateway({ 
-      toE164: input.phoneE164, 
-      body: message 
-    });
+    const approvalRequest = await createApprovalRequest(approvalInput);
 
     return {
       success: true,
-      schedulingUrl: schedulingLink.url,
-      providerName: provider.name,
-      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
+      message: 'Meeting request sent to provider for approval',
+      approvalRequestId: approvalRequest.id,
+      status: 'pending_provider_approval'
     };
 
-  } catch (error: any) {
-    console.error('[Scheduling] Error:', error);
-    
-    // Send error message via WhatsApp
-    const errorMessage = `❌ *Scheduling Error*
-
-I'm having trouble setting up your appointment right now. 
-
-Please try again later or contact our support team directly.
-
-Error: ${error.message || 'Unknown error'}
-
-Luna ✨`;
-
-    await sendWhatsAppViaGateway({ 
-      toE164: input.phoneE164, 
-      body: errorMessage 
-    });
-
-    throw error;
+  } catch (error) {
+    console.error('[Schedule Meeting] Error:', error);
+    throw new Error('Failed to schedule meeting. Please try again later.');
   }
 }
 
 export async function getAvailableSlots(input: AvailableSlotsInput) {
   if (!/^\+\d{6,15}$/.test(input.phoneE164)) {
     throw new Error('Invalid phone number format');
-  }
-
-  if (!isCalendlyConfigured()) {
-    throw new Error('Meeting scheduling is not available at the moment');
   }
 
   try {
@@ -120,21 +82,37 @@ export async function getAvailableSlots(input: AvailableSlotsInput) {
       throw new Error('No healthcare provider available');
     }
 
-    const calendly = getCalendlyClient();
-    
-    // Default to tomorrow if no date provided
-    const targetDate = input.date ? new Date(input.date) : new Date(Date.now() + 24 * 60 * 60 * 1000);
-    const startTime = formatCalendlyDate(new Date(targetDate.setHours(9, 0, 0, 0))); // 9 AM
-    const endTime = formatCalendlyDate(new Date(targetDate.setHours(17, 0, 0, 0))); // 5 PM
+    let slotsMessage: string;
 
-    const availableSlots = await calendly.getAvailableTimeSlots(
-      provider.calendlyUserUri || provider.uri,
-      startTime,
-      endTime
-    );
+    // Try Calendly first, fallback to Google Meet info
+    if (isCalendlyConfigured() && provider.calendlyUserUri) {
+      try {
+        const calendly = getCalendlyClient();
+        
+        // Default to tomorrow if no date provided
+        const targetDate = input.date ? new Date(input.date) : new Date(Date.now() + 24 * 60 * 60 * 1000);
+        const startTime = formatCalendlyDate(new Date(targetDate.setHours(9, 0, 0, 0))); // 9 AM
+        const endTime = formatCalendlyDate(new Date(targetDate.setHours(17, 0, 0, 0))); // 5 PM
 
-    // Format available slots for WhatsApp
-    const slotsMessage = formatAvailableSlotsMessage(availableSlots, targetDate, provider.name);
+        const availableSlots = await calendly.getAvailableTimeSlots(
+          provider.calendlyUserUri,
+          startTime,
+          endTime
+        );
+
+        // Format available slots for WhatsApp
+        slotsMessage = formatAvailableSlotsMessage(availableSlots, targetDate, provider.name);
+      } catch (calendlyError) {
+        console.error('[Available Slots] Calendly failed, showing Google Meet info:', calendlyError);
+        slotsMessage = formatGoogleMeetInfo(provider.name, displayName);
+      }
+    } else if (isGoogleMeetConfigured()) {
+      // Show Google Meet availability info
+      slotsMessage = formatGoogleMeetAPIInfo(provider.name, displayName);
+    } else {
+      // Show Google Meet availability info
+      slotsMessage = formatGoogleMeetInfo(provider.name, displayName);
+    }
 
     await sendWhatsAppViaGateway({ 
       toE164: input.phoneE164, 
@@ -143,31 +121,309 @@ export async function getAvailableSlots(input: AvailableSlotsInput) {
 
     return {
       success: true,
-      availableSlots,
-      date: targetDate.toISOString().split('T')[0],
-      providerName: provider.name,
+      message: 'Availability information sent'
     };
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('[Available Slots] Error:', error);
-    
-    const errorMessage = `❌ *Availability Check Error*
-
-I couldn't check availability right now. Please try again later.
-
-Luna ✨`;
-
-    await sendWhatsAppViaGateway({ 
-      toE164: input.phoneE164, 
-      body: errorMessage 
-    });
-
-    throw error;
+    throw new Error('Failed to check availability. Please try again later.');
   }
 }
 
-// Helper functions
-async function getDisplayName(phoneE164: string, subjectType: string, subjectId: string | null): Promise<string> {
+/**
+ * Process provider confirmation/decline responses
+ */
+export async function handleProviderResponse(
+  providerPhone: string,
+  message: string
+): Promise<{ success: boolean; response: string }> {
+  try {
+    // Parse the message for approval responses
+    const confirmMatch = message.match(/CONFIRM\s+(approval-\d+-[a-z0-9]+)/i);
+    const declineMatch = message.match(/DECLINE\s+(approval-\d+-[a-z0-9]+)/i);
+
+    if (confirmMatch) {
+      const requestId = confirmMatch[1];
+      const result = await processProviderResponse(requestId, 'confirm', providerPhone);
+      
+      return {
+        success: result.success,
+        response: result.message
+      };
+    }
+
+    if (declineMatch) {
+      const requestId = declineMatch[1];
+      const result = await processProviderResponse(requestId, 'decline', providerPhone);
+      
+      return {
+        success: result.success,
+        response: result.message
+      };
+    }
+
+    // Check for provider asking for pending requests
+    if (message.toLowerCase().includes('pending') || message.toLowerCase().includes('requests')) {
+      const pendingRequests = await getPendingRequests(providerPhone);
+      
+      if (pendingRequests.length === 0) {
+        return {
+          success: true,
+          response: 'You have no pending meeting requests.'
+        };
+      }
+
+      let responseText = `📋 *Pending Meeting Requests*\n\n`;
+      
+      pendingRequests.forEach((request, index) => {
+        const timeStr = request.requestedTime.toLocaleString('en-US', {
+          weekday: 'short',
+          month: 'short',
+          day: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true,
+        });
+        
+        responseText += `${index + 1}. ${request.patientName}\n`;
+        responseText += `   📅 ${timeStr}\n`;
+        responseText += `   📱 ${request.patientPhone}\n`;
+        responseText += `   🆔 ${request.id}\n`;
+        responseText += `   ⏰ Expires: ${request.expiresAt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}\n\n`;
+      });
+
+      responseText += `Reply with "CONFIRM [ID]" or "DECLINE [ID]" to respond.`;
+
+      return {
+        success: true,
+        response: responseText
+      };
+    }
+
+    return {
+      success: false,
+      response: 'I didn\'t understand that. For meeting requests, reply with "CONFIRM [request-id]" or "DECLINE [request-id]", or say "pending" to see your requests.'
+    };
+
+  } catch (error) {
+    console.error('[Handle Provider Response] Error:', error);
+    return {
+      success: false,
+      response: 'Failed to process your response. Please try again.'
+    };
+  }
+}
+
+// Helper functions for message formatting
+function formatMeetingMessage(
+  displayName: string,
+  provider: ProviderWithCalendly,
+  meetingLink: string,
+  meetingType: 'calendly' | 'google_meet',
+  reason?: string,
+  googleMeetEvent?: GoogleMeetResponse | null
+): string {
+  const meetingTypeText = meetingType === 'google_meet' 
+    ? 'Google Meet (instant access)' 
+    : 'Calendly scheduling link (choose your time)';
+
+  let timeInfo = '';
+  if (googleMeetEvent && meetingType === 'google_meet') {
+    const startTime = new Date(googleMeetEvent.start.dateTime);
+    const endTime = new Date(googleMeetEvent.end.dateTime);
+    timeInfo = `
+📅 *Time:* ${startTime.toLocaleString('en-US', { 
+      weekday: 'short', 
+      month: 'short', 
+      day: 'numeric', 
+      hour: 'numeric', 
+      minute: '2-digit',
+      hour12: true 
+    })} - ${endTime.toLocaleTimeString('en-US', { 
+      hour: 'numeric', 
+      minute: '2-digit',
+      hour12: true 
+    })}`;
+  }
+
+  return `🗓️ *Meeting Scheduled*
+
+Hello ${displayName}! 
+
+Your consultation with ${provider.name} has been arranged:
+
+📱 *Meeting Link:* ${meetingLink}
+🔗 *Type:* ${meetingTypeText}
+👩‍⚕️ *Provider:* ${provider.name}
+${reason ? `📝 *Reason:* ${reason}` : ''}${timeInfo}
+
+${meetingType === 'google_meet' 
+  ? 'Click the link to join at your scheduled time. The meeting is already created and ready!'
+  : 'Click the link to choose your preferred time slot.'
+}
+
+This link is ready to use! If you need any changes, just reply here.
+
+With care,
+Luna ✨`;
+}
+
+function formatProviderMessage(
+  displayName: string,
+  provider: ProviderWithCalendly,
+  meetingLink: string,
+  meetingType: 'calendly' | 'google_meet',
+  googleMeetEvent?: GoogleMeetResponse | null
+): string {
+  const meetingTypeText = meetingType === 'google_meet' 
+    ? 'Google Meet (API created)' 
+    : 'Calendly (scheduling link)';
+
+  let timeInfo = '';
+  if (googleMeetEvent && meetingType === 'google_meet') {
+    const startTime = new Date(googleMeetEvent.start.dateTime);
+    const endTime = new Date(googleMeetEvent.end.dateTime);
+    timeInfo = `
+📅 *Time:* ${startTime.toLocaleString('en-US', { 
+      weekday: 'short', 
+      month: 'short', 
+      day: 'numeric', 
+      hour: 'numeric', 
+      minute: '2-digit',
+      hour12: true 
+    })} - ${endTime.toLocaleTimeString('en-US', { 
+      hour: 'numeric', 
+      minute: '2-digit',
+      hour12: true 
+    })}`;
+  }
+
+  return `📋 *New Appointment Scheduled*
+
+👤 *Patient:* ${displayName}
+👩‍⚕️ *Provider:* ${provider.name}
+🔗 *Meeting Link:* ${meetingLink}
+📱 *Type:* ${meetingTypeText}${timeInfo}
+
+${meetingType === 'google_meet' 
+  ? 'Google Meet event has been created and added to your calendar.'
+  : 'Patient will book their preferred time via Calendly.'
+}
+
+Please update your calendar accordingly.
+
+HOA Wellness Hub 🌸`;
+}
+
+// Helper function for Google Meet API availability info
+function formatGoogleMeetAPIInfo(providerName: string, displayName: string): string {
+  return `📅 *Availability Information*
+
+Hello ${displayName}!
+
+👩‍⚕️ *Provider:* ${providerName}
+📱 *Meeting Type:* Google Meet (provider approval required)
+
+🔗 **How it works:**
+• I'll send your request to the provider
+• Provider will confirm via WhatsApp
+• Once approved, I'll create the Google Meet event
+• You'll receive the calendar invitation and Meet link
+
+📋 **Next Steps:**
+1. Tell me when you'd like to meet (e.g., "tomorrow at 2 PM")
+2. I'll send the request to ${providerName}
+3. Provider will confirm and I'll create the meeting
+
+💡 *Example:* "I'd like to schedule for tomorrow at 2 PM"
+
+Ready to schedule? Just tell me your preferred time!
+
+With care,
+Luna ✨`;
+}
+
+// Helper function for Google Meet availability info (fallback)
+function formatGoogleMeetInfo(providerName: string, displayName: string): string {
+  return `📅 *Availability Information*
+
+Hello ${displayName}!
+
+👩‍⚕️ *Provider:* ${providerName}
+📱 *Meeting Type:* Google Meet (provider approval required)
+
+🔗 **How it works:**
+• I'll send your request to the provider
+• Provider will confirm via WhatsApp
+• Once approved, I'll create the meeting link
+• You'll receive the link instantly
+
+📋 **Next Steps:**
+1. Tell me when you'd like to meet (e.g., "tomorrow at 2 PM")
+2. I'll send the request to ${providerName}
+3. Provider will confirm and I'll create the meeting
+
+💡 *Example:* "I'd like to schedule for tomorrow at 2 PM"
+
+Ready to schedule? Just tell me your preferred time!
+
+With care,
+Luna ✨`;
+}
+
+// Helper functions for existing Calendly formatting
+function formatAvailableSlotsMessage(availableSlots: any[], targetDate: Date, providerName: string): string {
+  const dateStr = targetDate.toLocaleDateString('en-US', { 
+    weekday: 'long', 
+    month: 'long', 
+    day: 'numeric' 
+  });
+
+  if (availableSlots.length === 0) {
+    return `📅 *Availability Check*
+
+Hello! 
+
+👩‍⚕️ *Provider:* ${providerName}
+📅 *Date:* ${dateStr}
+
+❌ No available slots found for this date.
+
+💡 Try a different date or I can create an instant Google Meet link for you!
+
+Just reply with your preferred date and time.
+
+With care,
+Luna ✨`;
+  }
+
+  let message = `📅 *Available Time Slots*
+
+👩‍⚕️ *Provider:* ${providerName}
+📅 *Date:* ${dateStr}
+
+✅ Available times:\n\n`;
+
+  availableSlots.forEach((slot, index) => {
+    const time = new Date(slot.start_time).toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    });
+    message += `${index + 1}. ${time}\n`;
+  });
+
+  message += `\n💡 Reply with your preferred time number (e.g., "I want slot 2")
+Or tell me "Google Meet" for instant access!
+
+With care,
+Luna ✨`;
+
+  return message;
+}
+
+// Helper functions for display name and provider lookup
+async function getDisplayName(phoneE164: string, subjectType: 'patient' | 'visitor', subjectId: string | null): Promise<string> {
   try {
     if (subjectType === 'patient' && subjectId) {
       const patient = await prisma.patient.findUnique({
@@ -175,31 +431,83 @@ async function getDisplayName(phoneE164: string, subjectType: string, subjectId:
         select: { firstName: true, lastName: true }
       });
       if (patient) {
-        return [patient.firstName, patient.lastName].filter(Boolean).join(' ') || 'Friend';
+        return `${patient.firstName || ''} ${patient.lastName || ''}`.trim() || 'Patient';
       }
-    }
-
-    // Try to find by contact channel
-    const contact = await prisma.contactChannel.findFirst({
-      where: { type: 'whatsapp', value: phoneE164 },
-      include: {
-        patient: { select: { firstName: true, lastName: true } },
-        visitor: { select: { displayName: true } }
-      }
-    });
-
-    if (contact?.patient) {
-      return [contact.patient.firstName, contact.patient.lastName].filter(Boolean).join(' ') || 'Friend';
     }
     
-    if (contact?.visitor?.displayName) {
-      return contact.visitor.displayName;
-    }
-
-    return 'Friend';
+    const visitor = await prisma.visitor.findFirst({
+      where: { contacts: { some: { type: 'whatsapp', value: phoneE164 } } },
+      select: { displayName: true }
+    });
+    
+    return visitor?.displayName || 'Friend';
   } catch {
     return 'Friend';
   }
+}
+
+// Parse preferred time string into Date
+function parsePreferredTime(preferredTime?: string): Date {
+  if (!preferredTime) {
+    // Default to tomorrow at 2 PM
+    const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    tomorrow.setHours(14, 0, 0, 0); // 2 PM
+    return tomorrow;
+  }
+
+  const now = new Date();
+  const timeLower = preferredTime.toLowerCase();
+
+  // Handle common time expressions
+  if (timeLower.includes('tomorrow')) {
+    const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    
+    // Extract time if provided
+    const timeMatch = preferredTime.match(/(\d{1,2})\s*(:\s*\d{2})?\s*(am|pm)/i);
+    if (timeMatch) {
+      const hours = parseInt(timeMatch[1]);
+      const minutes = timeMatch[2] ? parseInt(timeMatch[2].replace(':', '')) : 0;
+      const period = timeMatch[3].toLowerCase();
+      
+      tomorrow.setHours(
+        period === 'pm' && hours !== 12 ? hours + 12 : hours,
+        minutes,
+        0,
+        0
+      );
+    } else {
+      tomorrow.setHours(14, 0, 0, 0); // Default 2 PM
+    }
+    
+    return tomorrow;
+  }
+
+  if (timeLower.includes('today')) {
+    const today = new Date();
+    
+    const timeMatch = preferredTime.match(/(\d{1,2})\s*(:\s*\d{2})?\s*(am|pm)/i);
+    if (timeMatch) {
+      const hours = parseInt(timeMatch[1]);
+      const minutes = timeMatch[2] ? parseInt(timeMatch[2].replace(':', '')) : 0;
+      const period = timeMatch[3].toLowerCase();
+      
+      today.setHours(
+        period === 'pm' && hours !== 12 ? hours + 12 : hours,
+        minutes,
+        0,
+        0
+      );
+    } else {
+      today.setHours(14, 0, 0, 0); // Default 2 PM
+    }
+    
+    return today;
+  }
+
+  // Default to tomorrow at 2 PM if parsing fails
+  const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+  tomorrow.setHours(14, 0, 0, 0);
+  return tomorrow;
 }
 
 interface ProviderWithCalendly {
@@ -209,14 +517,10 @@ interface ProviderWithCalendly {
   notifyMedication: boolean;
   notifyEscalation: boolean;
   notificationCooldownMinutes: number;
-  user: {
-    name: string;
-    email: string;
-  };
+  name: string;
+  email: string;
   calendlyUserUri?: string;
   uri?: string;
-  name?: string;
-  email?: string;
 }
 
 async function findProvider(providerName?: string): Promise<ProviderWithCalendly | null> {
@@ -235,11 +539,35 @@ async function findProvider(providerName?: string): Promise<ProviderWithCalendly
 
     if (!provider) {
       // Get any provider as fallback
-      return await prisma.providerProfile.findFirst({
+      const fallbackProvider = await prisma.providerProfile.findFirst({
         include: {
           user: { select: { name: true, email: true } }
         }
       });
+      
+      if (!fallbackProvider) {
+        return null;
+      }
+      
+      // Try to get Calendly user URI by email for fallback
+      let calendlyUserUri = null;
+      if (fallbackProvider.user.email) {
+        try {
+          const calendly = getCalendlyClient();
+          const calendlyUser = await calendly.getUserByEmail(fallbackProvider.user.email);
+          calendlyUserUri = calendlyUser?.uri || null;
+        } catch (error) {
+          console.error('[Find Provider Fallback] Calendly lookup error:', error);
+        }
+      }
+
+      return {
+        ...fallbackProvider,
+        name: fallbackProvider.user.name,
+        email: fallbackProvider.user.email,
+        calendlyUserUri: calendlyUserUri || fallbackProvider.user.email,
+        uri: calendlyUserUri || `/users/${fallbackProvider.user.email}`
+      };
     }
 
     // Try to get Calendly user URI by email
@@ -265,112 +593,4 @@ async function findProvider(providerName?: string): Promise<ProviderWithCalendly
     console.error('[Find Provider] Error:', error);
     return null;
   }
-}
-
-async function logSchedulingRequest(
-  input: ScheduleMeetingInput,
-  schedulingLink: CalendlySchedulingLink,
-  displayName: string,
-  provider: ProviderWithCalendly
-) {
-  try {
-    // Create a document to track the scheduling request
-    await prisma.document.create({
-      data: {
-        url: schedulingLink.url,
-        filename: `scheduling_request_${Date.now()}.json`,
-        contentType: 'application/json',
-        title: 'Meeting Scheduling Request',
-        typeCode: 'scheduling_request',
-        patientId: input.subjectType === 'patient' ? input.subjectId || undefined : undefined,
-        metadata: {
-          phoneE164: input.phoneE164,
-          displayName,
-          providerName: provider.name,
-          providerEmail: provider.email,
-          preferredTime: input.preferredTime,
-          reason: input.reason,
-          schedulingLinkUri: schedulingLink.uri,
-          requestedAt: new Date().toISOString(),
-          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-        },
-      },
-    });
-
-    // Log in conversation if exists
-    const conversation = await prisma.conversation.findFirst({
-      where: {
-        subjectType: input.subjectType as any,
-        [input.subjectType === 'patient' ? 'patientId' : 'visitorId']: input.subjectId,
-      },
-      orderBy: { updatedAt: 'desc' }
-    });
-
-    if (conversation) {
-      await prisma.commMessage.create({
-        data: {
-          conversationId: conversation.id,
-          direction: 'outbound',
-          via: 'whatsapp',
-          body: `Scheduling link sent for ${provider.name} consultation: ${schedulingLink.url}`,
-          senderType: 'system',
-          meta: {
-            type: 'scheduling_request',
-            providerName: provider.name,
-            schedulingUrl: schedulingLink.url,
-          },
-        } as any,
-      });
-    }
-  } catch (error) {
-    console.error('[Log Scheduling] Error:', error);
-    // Don't throw - logging errors shouldn't break the flow
-  }
-}
-
-function formatAvailableSlotsMessage(slots: any[], date: Date, providerName: string): string {
-  const dateStr = date.toLocaleDateString('en-US', { 
-    weekday: 'long', 
-    month: 'long', 
-    day: 'numeric' 
-  });
-
-  if (!slots || slots.length === 0) {
-    return `📅 *Available Appointments*
-
-No available slots found for ${dateStr} with ${providerName}.
-
-Would you like me to:
-1. Check a different date?
-2. Send you a general scheduling link to choose your own time?
-
-Just let me know! 🌸
-
-Luna ✨`;
-  }
-
-  const slotsList = slots.slice(0, 6).map((slot, index) => {
-    const startTime = new Date(slot.start_time).toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true
-    });
-    return `${index + 1}. ${startTime}`;
-  }).join('\n');
-
-  return `📅 *Available Appointments with ${providerName}*
-
-*${dateStr}:*
-
-${slotsList}
-
-${slots.length > 6 ? `... and ${slots.length - 6} more slots` : ''}
-
-Would you like me to:
-1. Book a specific time?
-2. Send you a scheduling link to choose?
-
-Just reply with your preference! 🌸
-
-Luna ✨`;
 }

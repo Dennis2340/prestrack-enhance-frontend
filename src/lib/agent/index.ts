@@ -4,7 +4,7 @@ import { ragSearch } from "./tools/rag";
 import OpenAI from "openai";
 import { createMedicalEscalation } from "./tools/medical";
 import { fetchPatientContextByPhone } from "./tools/patientContext";
-import { scheduleMeeting, getAvailableSlots } from "./tools/scheduling";
+import { scheduleMeeting, getAvailableSlots, handleProviderResponse } from "./tools/scheduling";
 import { 
   startSchedulingSession, 
   processDateSelection, 
@@ -396,6 +396,15 @@ Example:
           } catch (e: any) {
             console.error('[Agent->check_availability] error', e?.message || e);
             answer = "I'm having trouble checking availability right now. Please try again later.";
+          }
+        } else if (providerScopedPhone && (msg.toLowerCase().includes('confirm') || msg.toLowerCase().includes('decline') || msg.toLowerCase().includes('pending'))) {
+          // Handle provider responses for meeting approvals
+          try {
+            const result = await handleProviderResponse(providerScopedPhone, msg);
+            answer = result.response;
+          } catch (e: any) {
+            console.error('[Agent->provider_response] error', e?.message || e);
+            answer = "I'm having trouble processing your response. Please try again.";
           }
         } else if (providedAnswer) {
           answer = providedAnswer;
