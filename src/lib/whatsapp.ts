@@ -1,7 +1,6 @@
 export type SendWhatsAppViaGatewayParams = {
   toE164: string; // phone number in E.164 format, e.g. "+2327xxxxxxx"
   body: string; // message text
-  lid?: string; // optional gateway session/client id
 };
 
 // Format to E.164 (defaults to Sierra Leone +232 when country code missing)
@@ -24,9 +23,9 @@ export function derivePhoneFromEmail(email?: string | null) {
   return undefined;
 }
 
-export async function sendWhatsAppViaGateway({ toE164, body, lid }: SendWhatsAppViaGatewayParams) {
+export async function sendWhatsAppViaGateway({ toE164, body }: SendWhatsAppViaGatewayParams) {
   const base = (process.env.WHATSAPP_GATEWAY_URL || "https://hoa-client.onrender.com").replace(/\/+$/, "");
-  const resolvedLid = (lid || process.env.WHATSAPP_LID || "").trim() || undefined;
+
   const url = `${base}/send-whatsapp`;
 
   try {
@@ -36,7 +35,7 @@ export async function sendWhatsAppViaGateway({ toE164, body, lid }: SendWhatsApp
       body: JSON.stringify({
         phoneE164: toE164,
         message: body,
-        ...(resolvedLid ? { lid: resolvedLid } : {}),
+        
       }),
     });
 
@@ -47,7 +46,6 @@ export async function sendWhatsAppViaGateway({ toE164, body, lid }: SendWhatsApp
         toE164,
         status: res.status,
         responseBody: text,
-        lidProvided: Boolean(resolvedLid),
       });
       throw new Error(`Gateway error ${res.status}: ${text}`);
     }
@@ -58,7 +56,6 @@ export async function sendWhatsAppViaGateway({ toE164, body, lid }: SendWhatsApp
     console.error("[sendWhatsAppViaGateway] Unexpected error", {
       url,
       toE164,
-      lidProvided: Boolean(resolvedLid),
       message: e?.message || String(e),
     });
     throw e;
