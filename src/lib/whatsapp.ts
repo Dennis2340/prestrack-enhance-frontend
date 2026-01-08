@@ -27,18 +27,40 @@ export function derivePhoneFromEmail(email?: string | null) {
 export async function sendWhatsAppViaGateway({ toE164, body, lid }: SendWhatsAppViaGatewayParams) {
   const base = (process.env.WHATSAPP_GATEWAY_URL || "https://hoa-client.onrender.com").replace(/\/+$/, "");
   const resolvedLid = (lid || process.env.WHATSAPP_LID || "").trim() || undefined;
-  const res = await fetch(`${base}/send-whatsapp`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ 
-      phoneE164: toE164, 
-      message: body,
-      ...(resolvedLid ? { lid: resolvedLid } : {})
-    }),
-  });
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`Gateway error ${res.status}: ${text}`);
+  const url = `${base}/send-whatsapp`;
+
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        phoneE164: toE164,
+        message: body,
+        ...(resolvedLid ? { lid: resolvedLid } : {}),
+      }),
+    });
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      console.error("[sendWhatsAppViaGateway] Gateway request failed", {
+        url,
+        toE164,
+        status: res.status,
+        responseBody: text,
+        lidProvided: Boolean(resolvedLid),
+      });
+      throw new Error(`Gateway error ${res.status}: ${text}`);
+    }
+
+    return res.json().catch(() => ({}));
+  } catch (e: any) {
+    console.log(e)
+    console.error("[sendWhatsAppViaGateway] Unexpected error", {
+      url,
+      toE164,
+      lidProvided: Boolean(resolvedLid),
+      message: e?.message || String(e),
+    });
+    throw e;
   }
-  return res.json().catch(() => ({}));
 }

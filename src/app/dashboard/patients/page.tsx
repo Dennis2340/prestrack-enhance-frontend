@@ -10,6 +10,8 @@ export default function PatientsPage() {
   const [items, setItems] = useState<PatientItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [phoneE164, setPhoneE164] = useState("");
@@ -43,6 +45,26 @@ export default function PatientsPage() {
   useEffect(() => {
     load();
   }, []);
+
+  async function onDeleteConfirmed() {
+    if (!confirmDeleteId) return;
+    setDeletingId(confirmDeleteId);
+    try {
+      const res = await fetch('/api/admin/patients/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: confirmDeleteId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || `Failed (${res.status})`);
+      setConfirmDeleteId(null);
+      await load();
+    } catch (e: any) {
+      alert(e?.message || 'Failed to delete patient');
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -267,11 +289,34 @@ export default function PatientsPage() {
                     } catch(e:any) { alert(e?.message || 'Failed') }
                   }}
                 >Notify access</button>
+
+                <button
+                  className="text-red-600 hover:underline ml-3"
+                  onClick={() => setConfirmDeleteId(p.id)}
+                >Delete</button>
               </div>
             </div>
           ))
         )}
       </div>
+
+      {confirmDeleteId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setConfirmDeleteId(null)} />
+          <div className="relative bg-white w-full max-w-md rounded shadow-lg p-4">
+            <div className="mb-3">
+              <h3 className="text-lg font-semibold">Delete patient?</h3>
+              <p className="text-sm text-gray-600 mt-1">This will remove the patient record and associated data. This action cannot be undone.</p>
+            </div>
+            <div className="flex items-center justify-end gap-2">
+              <button onClick={() => setConfirmDeleteId(null)} className="px-4 py-2 rounded border">Cancel</button>
+              <button onClick={onDeleteConfirmed} disabled={deletingId === confirmDeleteId} className="bg-red-600 text-white px-4 py-2 rounded disabled:opacity-50">
+                {deletingId === confirmDeleteId ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
