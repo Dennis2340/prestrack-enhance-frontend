@@ -59,6 +59,10 @@ export class GoogleMeetAPI {
   private tokenExpiry: number = 0;
   private baseUrl = 'https://www.googleapis.com/calendar/v3';
 
+  private getCalendarId(): string {
+    return process.env.GOOGLE_CALENDAR_ID || 'primary';
+  }
+
   constructor(credentialsJson: string) {
     try {
       this.credentials = typeof credentialsJson === 'string' 
@@ -189,9 +193,11 @@ export class GoogleMeetAPI {
 
     try {
       const accessToken = await this.getAccessToken();
+
+      const calendarId = encodeURIComponent(this.getCalendarId());
       
       // Create the event with conference data
-      const eventResponse = await fetch(`${this.baseUrl}/calendars/primary/events?conferenceDataVersion=1`, {
+      const eventResponse = await fetch(`${this.baseUrl}/calendars/${calendarId}/events?conferenceDataVersion=1`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -227,8 +233,10 @@ export class GoogleMeetAPI {
   async getEvent(eventId: string): Promise<any> {
     try {
       const accessToken = await this.getAccessToken();
+
+      const calendarId = encodeURIComponent(this.getCalendarId());
       
-      const response = await fetch(`${this.baseUrl}/calendars/primary/events/${eventId}`, {
+      const response = await fetch(`${this.baseUrl}/calendars/${calendarId}/events/${eventId}`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${accessToken}`,
@@ -252,8 +260,10 @@ export class GoogleMeetAPI {
   async deleteEvent(eventId: string): Promise<void> {
     try {
       const accessToken = await this.getAccessToken();
+
+      const calendarId = encodeURIComponent(this.getCalendarId());
       
-      const response = await fetch(`${this.baseUrl}/calendars/primary/events/${eventId}`, {
+      const response = await fetch(`${this.baseUrl}/calendars/${calendarId}/events/${eventId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${accessToken}`,
