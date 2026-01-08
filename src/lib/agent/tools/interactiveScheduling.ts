@@ -380,12 +380,22 @@ async function storeSchedulingSession(session: SchedulingSession) {
   });
   
   if (existingDoc) {
+    const existingMetaRaw: any = (existingDoc as any).metadata;
+    const existingMeta: any = (() => {
+      if (!existingMetaRaw) return {};
+      if (typeof existingMetaRaw === 'string') {
+        try { return JSON.parse(existingMetaRaw); } catch { return {}; }
+      }
+      if (typeof existingMetaRaw === 'object') return existingMetaRaw;
+      return {};
+    })();
+
     // Update existing
     await prisma.document.update({
       where: { id: existingDoc.id },
       data: {
         metadata: {
-          ...JSON.parse(existingDoc.metadata?.toString() || '{}'),
+          ...existingMeta,
           sessionData: JSON.stringify(session),
           expiresAt: session.expiresAt.toISOString()
         },
