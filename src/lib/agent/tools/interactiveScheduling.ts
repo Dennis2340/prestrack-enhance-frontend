@@ -2,9 +2,55 @@
 // Patients select time → Provider approval → Google Meet event creation
 
 import prisma from '@/lib/prisma';
-import { sendWhatsAppViaGateway } from '@/lib/whatsapp';
-import { isGoogleMeetConfigured } from '@/lib/googleMeetApi';
-import { createApprovalRequest, getPendingRequests } from './providerApproval';
+import { createApprovalRequest } from './providerApproval';
+
+async function ensurePatientIdForPhone(phoneE164: string): Promise<string> {
+  const cc = await prisma.contactChannel.findFirst({
+    where: { type: 'whatsapp', value: phoneE164, patientId: { not: null } },
+    select: { patientId: true } as any,
+  });
+  if (cc?.patientId) return cc.patientId as any;
+
+  const created = await prisma.patient.create({
+    data: {
+      firstName: null,
+      lastName: null,
+      contacts: {
+        create: {
+          ownerType: 'patient' as any,
+          type: 'whatsapp',
+          value: phoneE164,
+          verified: true,
+          preferred: true,
+        },
+      },
+    },
+    select: { id: true },
+  });
+  return created.id;
+}
+
+async function getLatestSchedulingSessionByPhone(phoneE164: string): Promise<SchedulingSession | null> {
+  try {
+    const patientId = await ensurePatientIdForPhone(phoneE164);
+    const doc = await prisma.document.findFirst({
+      where: {
+        typeCode: 'scheduling_session',
+        patientId,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (!doc) return null;
+
+    const md = doc.metadata as any;
+    const session = JSON.parse(md?.sessionData || '{}') as SchedulingSession;
+    if (!session?.id) return null;
+    if (new Date() > new Date(session.expiresAt)) return null;
+    return session;
+  } catch {
+    return null;
+  }
+}
 
 export type SchedulingSession = {
   id: string;
@@ -32,9 +78,11 @@ export async function startSchedulingSession(
     throw new Error('No healthcare provider available');
   }
 
+  const patientIdForDoc = patientId && patientId.trim() ? patientId : await ensurePatientIdForPhone(phoneE164);
+
   const session: SchedulingSession = {
     id: sessionId,
-    patientId,
+    patientId: patientIdForDoc,
     providerId: provider.id,
     status: 'selecting_time',
     createdAt: new Date(),
@@ -79,7 +127,10 @@ export async function processTimeSelection(
   preferredTime: string,
   reason?: string
 ): Promise<string> {
-  const session = await getSchedulingSession(sessionId);
+  const resolvedSessionId = (sessionId || '').trim();
+  const session = resolvedSessionId
+    ? await getSchedulingSession(resolvedSessionId)
+    : await getLatestSchedulingSessionByPhone(phoneE164);
   if (!session || session.status !== 'selecting_time') {
     throw new Error('Invalid or expired session');
   }
@@ -342,29 +393,21 @@ async function storeSchedulingSession(session: SchedulingSession) {
       }
     });
   } else {
-    // Create new - only include patient relation if it's a valid patient ID
+    // Create new
     const createData: any = {
       url: `scheduling_session_${session.id}`,
       filename: `session_${session.id}.json`,
       contentType: 'application/json',
       title: 'Scheduling Session',
       typeCode: 'scheduling_session',
+      patientId: session.patientId,
       metadata: {
         sessionId: session.id,
         sessionData: JSON.stringify(session),
         expiresAt: session.expiresAt.toISOString()
       }
     };
-    
-    // Only add patient relation if it's a valid, non-empty patient ID
-    if (session.patientId && session.patientId !== '' && session.patientId.length > 0) {
-      createData.patient = {
-        connect: {
-          id: session.patientId
-        }
-      };
-    }
-    
+
     await prisma.document.create({
       data: createData
     });

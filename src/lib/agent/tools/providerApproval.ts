@@ -5,6 +5,32 @@ import prisma from '@/lib/prisma';
 import { sendWhatsAppViaGateway } from '@/lib/whatsapp';
 import { createHOAMeeting, GoogleMeetResponse } from '@/lib/googleMeetApi';
 
+async function ensurePatientIdForPhone(phoneE164: string): Promise<string> {
+  const cc = await prisma.contactChannel.findFirst({
+    where: { type: 'whatsapp', value: phoneE164, patientId: { not: null } },
+    select: { patientId: true } as any,
+  });
+  if (cc?.patientId) return cc.patientId as any;
+
+  const created = await prisma.patient.create({
+    data: {
+      firstName: null,
+      lastName: null,
+      contacts: {
+        create: {
+          ownerType: 'patient' as any,
+          type: 'whatsapp',
+          value: phoneE164,
+          verified: true,
+          preferred: true,
+        },
+      },
+    },
+    select: { id: true },
+  });
+  return created.id;
+}
+
 export interface PendingMeetingRequest {
   id: string;
   patientPhone: string;
@@ -57,22 +83,7 @@ export async function createApprovalRequest(input: ApprovalRequestInput): Promis
   };
 
   try {
-    // Find patient by phone number first
-    let patientId = null;
-    if (input.patientPhone) {
-      const patient = await prisma.patient.findFirst({
-        where: {
-          contacts: {
-            some: {
-              type: 'whatsapp',
-              value: input.patientPhone
-            }
-          }
-        },
-        select: { id: true }
-      });
-      patientId = patient?.id || null;
-    }
+    const patientIdForDoc = await ensurePatientIdForPhone(input.patientPhone);
 
     // Store in database using Document model
     await prisma.document.create({
@@ -81,12 +92,8 @@ export async function createApprovalRequest(input: ApprovalRequestInput): Promis
         url: requestId,
         filename: requestId, // Using requestId as filename since it's required
         contentType: 'application/json',
+        patientId: patientIdForDoc,
         metadata: approvalRequest as any, // Cast to any for Prisma JSON compatibility
-        patient: patientId ? {
-          connect: {
-            id: patientId
-          }
-        } : undefined,
       },
     });
 

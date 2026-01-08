@@ -189,7 +189,7 @@ export async function agentRespond(opts: {
  - Prefer using the provided Context when available; summarize only the most relevant facts from Context.
  - If Context is missing or thin, provide general, evidence-based health guidance within common clinical practice. Keep it high-level and safe.
  - Avoid long URLs unless essential.
- - You can help schedule appointments with healthcare providers via Calendly integration.`;
+ - You can help schedule appointments with healthcare providers.`;
 
       const patientStyle = `
 TONE AND STYLE FOR PATIENTS:
@@ -228,7 +228,7 @@ If the user indicates ANC danger signs (any of: severe headache, blurred vision,
       const outputFormat = `
 OUTPUT FORMAT (MANDATORY):
 Return a single JSON object with keys:
-- action: 'answer' | 'escalate' | 'onboard_name' | 'schedule_meeting' | 'check_availability' | 'start_interactive_scheduling' | 'process_date_selection' | 'process_time_selection'
+- action: 'answer' | 'escalate' | 'onboard_name' | 'schedule_meeting' | 'check_availability' | 'start_interactive_scheduling' | 'process_time_selection'
 - answer: string (message to send to the user, WhatsApp-friendly)
 - escalate_summary?: string (short summary if action is 'escalate')
 - name?: string (when action is 'onboard_name', the visitor name to save)
@@ -236,15 +236,11 @@ Return a single JSON object with keys:
 - preferred_time?: string (for scheduling actions)
 - reason?: string (reason for appointment)
 - date?: string (YYYY-MM-DD for availability checks)
-- selected_dates?: string[] (for date selection, array of dates)
-- time_slot_index?: number (for time slot selection)
 - session_id?: string (for interactive scheduling session)
 Example:
 {"action":"answer","answer":"..."}
 Example:
 {"action":"start_interactive_scheduling","answer":"I'll help you schedule an appointment! Let me check availability...","provider_name":"Dr. Smith"}
-Example:
-{"action":"process_date_selection","answer":"Great! I'll check time slots for those dates.","selected_dates":["2024-01-15","2024-01-16"]}
 `;
 
       const sys = [
@@ -331,11 +327,12 @@ Example:
           }
           // Send the provided answer or a friendly default
           answer = providedAnswer || "🌸 Thanks — noted! I'm Luna, your women's wellness assistant. I can help you schedule appointments, track cycles, provide health guidance, or connect with our community. What would you like help with today?";
-        } else if (action === 'start_interactive_scheduling' && patientScopedPhone) {
+        } else if (action === 'start_interactive_scheduling' && (patientScopedPhone || phoneE164)) {
           try {
-            const patient = await getPatientByPhone(patientScopedPhone);
+            const activePhone = (patientScopedPhone || phoneE164) as string;
+            const patient = await getPatientByPhone(activePhone);
             const result = await startSchedulingSession(
-              patientScopedPhone,
+              activePhone,
               patient?.id || '',
               parsed.provider_name
             );
@@ -344,11 +341,12 @@ Example:
             console.error('[Agent->start_interactive_scheduling] error', e?.message || e);
             answer = "I'm having trouble starting the scheduling process. Please try again later.";
           }
-        } else if (action === 'process_time_selection' && patientScopedPhone) {
+        } else if (action === 'process_time_selection' && (patientScopedPhone || phoneE164)) {
           try {
+            const activePhone = (patientScopedPhone || phoneE164) as string;
             const message = await processTimeSelection(
               parsed.session_id || '',
-              patientScopedPhone,
+              activePhone,
               parsed.preferred_time || 'tomorrow at 2 PM',
               parsed.reason
             );
