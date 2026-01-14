@@ -7,6 +7,7 @@ export interface AuthUser {
   email?: string | null;
 }
 
+
 export function getAuthFromRequest(req: NextRequest): AuthUser | null {
   // Prefer httpOnly cookie set by login
   const cookie = req.cookies.get("auth_token")?.value;
