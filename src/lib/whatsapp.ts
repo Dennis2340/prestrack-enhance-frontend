@@ -24,7 +24,7 @@ export function derivePhoneFromEmail(email?: string | null) {
 }
 
 export async function sendWhatsAppViaGateway({ toE164, body }: SendWhatsAppViaGatewayParams) {
-  const base = (process.env.WHATSAPP_GATEWAY_URL || "https://hoa-client.onrender.com").replace(/\/+$/, "");
+  const base = (process.env.WHATSAPP_GATEWAY_URL || "https://prestrack-client.onrender.com").replace(/\/+$/, "");
 
   const url = `${base}/send-whatsapp`;
 
