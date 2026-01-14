@@ -59,7 +59,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
           </nav>
           <div className="p-4 border-t border-gray-200">
             <LogoutButton />
-            <div className="mt-2 text-xs text-gray-500">HOA Wellness Hub • Women's Health & AI Care</div>
+            <div className="mt-2 text-xs text-gray-500">PresTrack • AI & WhatsApp Healthcare</div>
           </div>
         </aside>
 
@@ -71,8 +71,8 @@ export default async function DashboardLayout({ children }: { children: ReactNod
               <span className="text-sm text-gray-500">Menu</span>
             </div>
             <div className="flex items-center gap-2 font-semibold">
-              <img src="/hoa-logo.jpeg" alt="HOA" className="h-5 w-5" />
-              <span>HOA Wellness Hub</span>
+              <img src="/health.png" alt="PresTrack" className="h-5 w-5" />
+              <span>PresTrack</span>
             </div>
             <div className="text-sm text-gray-500 capitalize">{role}</div>
           </div>

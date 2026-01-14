@@ -2,167 +2,6 @@ generator client {
   provider = "prisma-client-js"
 }
 
-// --- HOA Women's Wellness Additions ---
-
-// Menstrual Cycle Phase
-enum CyclePhase {
-  menstrual
-  follicular
-  ovulation
-  luteal
-  premenstrual
-}
-
-// Symptom types
-enum SymptomType {
-  cramps
-  bloating
-  headache
-  breast_tenderness
-  mood_swings
-  fatigue
-  acne
-  cravings
-  nausea
-  backache
-  insomnia
-  other
-}
-
-// Flow intensity
-enum FlowIntensity {
-  light
-  medium
-  heavy
-  very_heavy
-}
-
-// Community content types
-enum PostType {
-  question
-  experience
-  tip
-  support
-  milestone
-  resource
-}
-
-// Menstrual Cycle Tracking
-model MenstrualCycle {
-  id        String   @id @default(uuid())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  patientId    String
-  startDate    DateTime
-  endDate      DateTime?
-  cycleLength  Int? // Typical cycle length in days
-  periodLength Int? // Period length in days
-  notes        String?
-
-  // Cycle predictions
-  predictedOvulation  DateTime?
-  predictedNextPeriod DateTime?
-
-  patient   Patient    @relation(fields: [patientId], references: [id])
-  cycleDays CycleDay[]
-
-  @@index([patientId, startDate])
-  @@index([patientId, predictedNextPeriod])
-}
-
-model CycleDay {
-  id        String   @id @default(uuid())
-  createdAt DateTime @default(now())
-
-  cycleId   String
-  dayNumber Int // Day 1, 2, 3, etc.
-  date      DateTime
-
-  // Symptoms and observations
-  phase         CyclePhase?
-  flowIntensity FlowIntensity?
-  symptoms      Json? // Array of {type: SymptomType, severity: 1-5, notes: string}
-  mood          Int? // 1-5 mood scale
-  energy        Int? // 1-5 energy scale
-  sleep         Int? // Hours of sleep
-  weight        Float? // Weight in kg
-  temperature   Float? // Basal body temperature
-  notes         String?
-
-  cycle MenstrualCycle @relation(fields: [cycleId], references: [id])
-
-  @@unique([cycleId, dayNumber])
-  @@index([cycleId, dayNumber])
-}
-
-// Community Features
-model CommunityPost {
-  id        String   @id @default(uuid())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  authorId    String
-  authorType  String   @default("user") // "user" or "patient"
-  type        PostType
-  title       String?
-  content     String
-  tags        Json? // Array of strings
-  isAnonymous Boolean  @default(false)
-  likes       Int      @default(0)
-  isPinned    Boolean  @default(false)
-
-  // Relations
-  userAuthor    User?     @relation("UserPosts", fields: [authorId], references: [id], map: "CommunityPost_userAuthor_fkey")
-  patientAuthor Patient?  @relation("PatientPosts", fields: [authorId], references: [id], map: "CommunityPost_patientAuthor_fkey")
-  comments      Comment[]
-
-  @@index([authorId, createdAt])
-  @@index([type, createdAt])
-  @@index([isPinned, createdAt])
-}
-
-model Comment {
-  id        String   @id @default(uuid())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  postId     String
-  authorId   String
-  authorType String  @default("user") // "user" or "patient"
-  content    String
-  likes      Int     @default(0)
-  isAnswer   Boolean @default(false) // For question posts
-
-  // Relations
-  post          CommunityPost @relation(fields: [postId], references: [id], map: "Comment_post_fkey")
-  userAuthor    User?         @relation("UserComments", fields: [authorId], references: [id], map: "Comment_userAuthor_fkey")
-  patientAuthor Patient?      @relation("PatientComments", fields: [authorId], references: [id], map: "Comment_patientAuthor_fkey")
-
-  @@index([postId, createdAt])
-  @@index([authorId, createdAt])
-}
-
-model Follow {
-  id        String   @id @default(uuid())
-  createdAt DateTime @default(now())
-
-  followerId    String
-  followerType  String @default("user") // "user" or "patient"
-  followingId   String
-  followingType String @default("user") // "user" or "patient"
-
-  // Relations
-  followerUser     User?    @relation("UserFollows", fields: [followerId], references: [id], map: "Follow_followerUser_fkey")
-  followerPatient  Patient? @relation("PatientFollows", fields: [followerId], references: [id], map: "Follow_followerPatient_fkey")
-  followingUser    User?    @relation("UserFollowedBy", fields: [followingId], references: [id], map: "Follow_followingUser_fkey")
-  followingPatient Patient? @relation("PatientFollowedBy", fields: [followingId], references: [id], map: "Follow_followingPatient_fkey")
-
-  @@unique([followerId, followerType, followingId, followingType])
-  @@index([followerId, createdAt])
-  @@index([followingId, createdAt])
-}
-
 // --- ANC DAK additions ---
 
 enum AdministrativeGender {
@@ -173,57 +12,56 @@ enum AdministrativeGender {
 }
 
 model Pregnancy {
-  id        String   @id @default(uuid())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String   @id @default(uuid())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  patientId String
-  isActive  Boolean   @default(true)
+  patientId   String
+  isActive    Boolean  @default(true)
   // Core ANC DAK data elements
-  lmp       DateTime?
-  edd       DateTime?
-  gravida   Int?
-  para      Int?
-  riskFlags Json?
+  lmp         DateTime?
+  edd         DateTime?
+  gravida     Int?
+  para        Int?
+  riskFlags   Json?
 
-  patient       Patient           @relation(fields: [patientId], references: [id])
-  encounters    ANCEncounter[]
+  patient     Patient  @relation(fields: [patientId], references: [id])
+  encounters  ANCEncounter[]
   interventions ANCIntervention[]
 
   @@index([patientId, isActive])
 }
 
 model ANCEncounter {
-  id        String   @id @default(uuid())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String   @id @default(uuid())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  pregnancyId    String
-  date           DateTime
-  location       String?
+  pregnancyId  String
+  date         DateTime
+  location     String?
   providerUserId String?
 
-  pregnancy    Pregnancy        @relation(fields: [pregnancyId], references: [id])
+  pregnancy    Pregnancy @relation(fields: [pregnancyId], references: [id])
   observations ANCObservation[]
 
   @@index([pregnancyId, date])
 }
 
 model ANCObservation {
-  id        String   @id @default(uuid())
-  createdAt DateTime @default(now())
+  id            String      @id @default(uuid())
+  createdAt     DateTime    @default(now())
 
-  encounterId          String
+  encounterId   String
   // Coding
-  codeSystem           String // e.g., LOINC, SNOMED
-  code                 String
+  codeSystem    String      // e.g., LOINC, SNOMED
+  code          String
   // Values (one of)
-  valueQuantity        Json?
+  valueQuantity Json?
   valueCodeableConcept Json?
-  note                 String?
+  note          String?
 
-  encounter ANCEncounter @relation(fields: [encounterId], references: [id])
-
+  encounter     ANCEncounter @relation(fields: [encounterId], references: [id])
   @@index([encounterId])
 }
 
@@ -235,34 +73,32 @@ enum ANCInterventionType {
 }
 
 model ANCIntervention {
-  id        String   @id @default(uuid())
-  createdAt DateTime @default(now())
+  id              String   @id @default(uuid())
+  createdAt       DateTime @default(now())
 
-  pregnancyId      String
-  type             ANCInterventionType
-  date             DateTime
-  medicationCode   String?
+  pregnancyId     String
+  type            ANCInterventionType
+  date            DateTime
+  medicationCode  String?
   medicationSystem String?
-  doseText         String?
+  doseText        String?
 
-  pregnancy Pregnancy @relation(fields: [pregnancyId], references: [id])
-
+  pregnancy       Pregnancy @relation(fields: [pregnancyId], references: [id])
   @@index([pregnancyId, type, date])
 }
 
 // Immunization for TT
 model Immunization {
-  id        String   @id @default(uuid())
-  createdAt DateTime @default(now())
+  id                  String   @id @default(uuid())
+  createdAt           DateTime @default(now())
 
-  patientId          String
-  vaccineCode        String
-  vaccineSystem      String
-  occurrenceDateTime DateTime
-  lotNumber          String?
+  patientId           String
+  vaccineCode         String
+  vaccineSystem       String
+  occurrenceDateTime  DateTime
+  lotNumber           String?
 
-  patient Patient @relation(fields: [patientId], references: [id])
-
+  patient             Patient  @relation(fields: [patientId], references: [id])
   @@index([patientId, occurrenceDateTime])
 }
 
@@ -342,51 +178,45 @@ enum MedicationRequestIntent {
 
 // Core Users
 model User {
-  id           String   @id @default(uuid())
-  name         String
-  email        String?  @unique
+  id        String   @id @default(uuid())
+  name      String
+  email     String?  @unique
   passwordHash String?
-  role         Role
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  role      Role
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  providerProfile     ProviderProfile?
+  providerProfile ProviderProfile?
   // Backrefs
-  uploadedDocuments   Document[]
+  uploadedDocuments Document[]
   performedAdherences Adherence[]
-
-  // HOA community features
-  communityPosts CommunityPost[] @relation("UserPosts")
-  comments       Comment[]       @relation("UserComments")
-  follows        Follow[]        @relation("UserFollows")
-  followers      Follow[]        @relation("UserFollowedBy")
 }
 
 model ProviderProfile {
-  id                          String  @id @default(uuid())
-  userId                      String  @unique
-  phoneE164                   String?
-  notifyMedication            Boolean @default(true)
-  notifyEscalation            Boolean @default(true)
-  notificationCooldownMinutes Int     @default(10)
+  id                            String  @id @default(uuid())
+  userId                        String  @unique
+  phoneE164                     String?
+  notifyMedication              Boolean @default(true)
+  notifyEscalation              Boolean @default(true)
+  notificationCooldownMinutes   Int     @default(10)
 
   user User @relation(fields: [userId], references: [id])
 }
 
 // Patients and Visitors
 model Patient {
-  id        String   @id @default(uuid())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String   @id @default(uuid())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  firstName            String?
-  lastName             String?
-  dateOfBirth          DateTime?
-  sex                  String? // legacy UI field
+  firstName   String?
+  lastName    String?
+  dateOfBirth DateTime?
+  sex         String?  // legacy UI field
   administrativeGender AdministrativeGender? // FHIR: male|female|other|unknown
-  externalId           String?               @unique
-  identifiers          Json? // FHIR Identifier[] (system,value,use)
-  address              Json? // FHIR Address structure
+  externalId  String?  @unique
+  identifiers Json?    // FHIR Identifier[] (system,value,use)
+  address     Json?    // FHIR Address structure
 
   contacts      ContactChannel[]
   conversations Conversation[]
@@ -398,19 +228,12 @@ model Patient {
   tasks         Task[]
   pregnancies   Pregnancy[]
   immunizations Immunization[]
-
-  // HOA additions
-  menstrualCycles MenstrualCycle[]
-  communityPosts  CommunityPost[]  @relation("PatientPosts")
-  comments        Comment[]        @relation("PatientComments")
-  follows         Follow[]         @relation("PatientFollows")
-  followers       Follow[]         @relation("PatientFollowedBy")
 }
 
 model Visitor {
-  id        String   @id @default(uuid())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String   @id @default(uuid())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   displayName String?
 
@@ -421,203 +244,203 @@ model Visitor {
 }
 
 model ContactChannel {
-  id        String   @id @default(uuid())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id        String      @id @default(uuid())
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
 
   ownerType SubjectType
   patientId String?
   visitorId String?
 
-  type      String // whatsapp | email | phone
-  value     String // E.164 for WhatsApp/phone
-  verified  Boolean @default(false)
-  preferred Boolean @default(false)
-  consent   Boolean @default(true)
+  type      String      // whatsapp | email | phone
+  value     String      // E.164 for WhatsApp/phone
+  verified  Boolean     @default(false)
+  preferred Boolean     @default(false)
+  consent   Boolean     @default(true)
 
-  patient Patient? @relation(fields: [patientId], references: [id])
-  visitor Visitor? @relation(fields: [visitorId], references: [id])
+  patient   Patient?    @relation(fields: [patientId], references: [id])
+  visitor   Visitor?    @relation(fields: [visitorId], references: [id])
 
   @@index([type, value])
 }
 
 model Conversation {
-  id        String   @id @default(uuid())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id            String            @id @default(uuid())
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
 
   subjectType   SubjectType
   patientId     String?
   visitorId     String?
-  channel       Channel            @default(whatsapp)
+  channel       Channel           @default(whatsapp)
   status        ConversationStatus @default(open)
   lastMessageAt DateTime?
 
-  patient Patient? @relation(fields: [patientId], references: [id])
-  visitor Visitor? @relation(fields: [visitorId], references: [id])
+  patient       Patient?          @relation(fields: [patientId], references: [id])
+  visitor       Visitor?          @relation(fields: [visitorId], references: [id])
 
-  messages CommMessage[]
+  messages      CommMessage[]
 
   @@index([subjectType, patientId])
   @@index([subjectType, visitorId])
 }
 
 model CommMessage {
-  id             String   @id @default(uuid())
+  id             String       @id @default(uuid())
   conversationId String
-  createdAt      DateTime @default(now())
+  createdAt      DateTime     @default(now())
 
-  direction Direction
-  via       Channel   @default(whatsapp)
-  body      String
-  mediaUrl  String?
-  meta      Json?
+  direction      Direction
+  via            Channel      @default(whatsapp)
+  body           String
+  mediaUrl       String?
+  meta           Json?
 
   // Sender tags
-  senderType String? // system | provider | patient | visitor
-  senderId   String?
+  senderType     String?      // system | provider | patient | visitor
+  senderId       String?
 
-  conversation Conversation @relation(fields: [conversationId], references: [id])
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
 
   @@index([conversationId, createdAt])
 }
 
 model Prescription {
-  id        String   @id @default(uuid())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             String          @id @default(uuid())
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
 
-  patientId        String
-  medicationName   String
-  strength         String?
-  form             String?
-  startDate        DateTime
-  endDate          DateTime?
-  timezone         String                  @default("UTC")
+  patientId      String
+  medicationName String
+  strength       String?
+  form           String?
+  startDate      DateTime
+  endDate        DateTime?
+  timezone       String          @default("UTC")
   // FHIR MedicationRequest additions
-  status           MedicationRequestStatus @default(active)
-  intent           MedicationRequestIntent @default(order)
-  medicationCode   String? // code value from system
-  medicationSystem String? // code system e.g., RxNorm/SNOMED
+  status         MedicationRequestStatus @default(active)
+  intent         MedicationRequestIntent @default(order)
+  medicationCode String?     // code value from system
+  medicationSystem String?   // code system e.g., RxNorm/SNOMED
 
-  patient   Patient          @relation(fields: [patientId], references: [id])
-  schedules DosageSchedule[]
-  tasks     Task[]
-  adherence Adherence[]
+  patient        Patient         @relation(fields: [patientId], references: [id])
+  schedules      DosageSchedule[]
+  tasks          Task[]
+  adherence      Adherence[]
 }
 
 model DosageSchedule {
-  id             String  @id @default(uuid())
-  prescriptionId String
-  frequency      String? // once_daily | twice_daily | interval_hours | custom
-  times          Json? // e.g., ["08:00","20:00"]
-  intervalHours  Int?
+  id              String         @id @default(uuid())
+  prescriptionId  String
+  frequency       String?        // once_daily | twice_daily | interval_hours | custom
+  times           Json?          // e.g., ["08:00","20:00"]
+  intervalHours   Int?
 
-  prescription Prescription @relation(fields: [prescriptionId], references: [id])
+  prescription    Prescription   @relation(fields: [prescriptionId], references: [id])
 }
 
 model Task {
-  id        String   @id @default(uuid())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             String      @id @default(uuid())
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
 
-  type          TaskType
-  status        TaskStatus @default(pending)
-  scheduledTime DateTime
-  notes         String?
-  metadata      Json?
+  type           TaskType
+  status         TaskStatus  @default(pending)
+  scheduledTime  DateTime
+  notes          String?
+  metadata       Json?
 
-  subjectType SubjectType
-  patientId   String?
-  visitorId   String?
+  subjectType    SubjectType
+  patientId      String?
+  visitorId      String?
 
   // Optional link for medication reminders
   prescriptionId String?
 
-  patient      Patient?      @relation(fields: [patientId], references: [id])
-  visitor      Visitor?      @relation(fields: [visitorId], references: [id])
-  prescription Prescription? @relation(fields: [prescriptionId], references: [id])
-  adherences   Adherence[]
+  patient        Patient?      @relation(fields: [patientId], references: [id])
+  visitor        Visitor?      @relation(fields: [visitorId], references: [id])
+  prescription   Prescription? @relation(fields: [prescriptionId], references: [id])
+  adherences     Adherence[]
 
   @@index([type, status, scheduledTime])
 }
 
 model Adherence {
-  id        String   @id @default(uuid())
-  createdAt DateTime @default(now())
+  id             String        @id @default(uuid())
+  createdAt      DateTime      @default(now())
 
-  patientId       String
-  prescriptionId  String
-  taskId          String?
-  event           AdherenceEvent
-  details         String?
-  effectiveAt     DateTime?
-  note            String?
+  patientId      String
+  prescriptionId String
+  taskId         String?
+  event          AdherenceEvent
+  details        String?
+  effectiveAt    DateTime?
+  note           String?
   performerUserId String?
 
-  patient       Patient      @relation(fields: [patientId], references: [id])
-  prescription  Prescription @relation(fields: [prescriptionId], references: [id])
-  task          Task?        @relation(fields: [taskId], references: [id])
-  performerUser User?        @relation(fields: [performerUserId], references: [id])
+  patient        Patient       @relation(fields: [patientId], references: [id])
+  prescription   Prescription  @relation(fields: [prescriptionId], references: [id])
+  task           Task?         @relation(fields: [taskId], references: [id])
+  performerUser  User?         @relation(fields: [performerUserId], references: [id])
 }
 
 model Escalation {
-  id        String   @id @default(uuid())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String   @id @default(uuid())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  patientId String
-  reason    String
-  summary   String?
-  meta      Json?
+  patientId   String
+  reason      String
+  summary     String?
+  meta        Json?
 
-  patient Patient @relation(fields: [patientId], references: [id])
+  patient     Patient  @relation(fields: [patientId], references: [id])
 }
 
 // Patient documents (images, PDFs, reports), maps to FHIR DocumentReference
 model Document {
-  id        String   @id @default(uuid())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id               String    @id @default(uuid())
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   patientId        String
   uploadedByUserId String?
 
-  title          String?
-  description    String?
-  url            String // storage URL
-  filename       String
-  contentType    String // MIME type
-  size           Int?
-  hash           String?
-  metadata       Json?
+  title            String?
+  description      String?
+  url              String     // storage URL
+  filename         String
+  contentType      String     // MIME type
+  size             Int?
+  hash             String?
+  metadata         Json?
   // FHIR DocumentReference alignment
-  status         DocumentStatus @default(current)
-  typeCode       String? // code for document type
-  typeSystem     String? // coding system for type
-  categoryCode   String?
-  categorySystem String?
-  authoredAt     DateTime?
-  context        Json?
+  status           DocumentStatus @default(current)
+  typeCode         String?        // code for document type
+  typeSystem       String?        // coding system for type
+  categoryCode     String?
+  categorySystem   String?
+  authoredAt       DateTime?
+  context          Json?
 
-  patient    Patient @relation(fields: [patientId], references: [id])
-  uploadedBy User?   @relation(fields: [uploadedByUserId], references: [id])
+  patient          Patient   @relation(fields: [patientId], references: [id])
+  uploadedBy       User?     @relation(fields: [uploadedByUserId], references: [id])
 
   @@index([patientId, createdAt])
 }
 
 // Minimal FHIR linkage table
 model FhirLink {
-  id        String   @id @default(uuid())
-  createdAt DateTime @default(now())
+  id           String    @id @default(uuid())
+  createdAt    DateTime  @default(now())
 
   resourceType String
   resourceId   String
   patientId    String?
   visitorId    String?
 
-  patient Patient? @relation(fields: [patientId], references: [id])
-  visitor Visitor? @relation(fields: [visitorId], references: [id])
+  patient      Patient?  @relation(fields: [patientId], references: [id])
+  visitor      Visitor?  @relation(fields: [visitorId], references: [id])
 
   @@index([resourceType, resourceId])
 }
