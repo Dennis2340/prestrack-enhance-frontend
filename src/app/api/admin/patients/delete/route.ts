@@ -12,9 +12,6 @@ export async function POST(req: Request) {
         prisma.conversation.deleteMany({ where: { patientId: id } }),
         prisma.contactChannel.deleteMany({ where: { patientId: id } }),
 
-        prisma.cycleDay.deleteMany({ where: { cycle: { patientId: id } } as any }),
-        prisma.menstrualCycle.deleteMany({ where: { patientId: id } }),
-
         prisma.aNCObservation.deleteMany({ where: { encounter: { pregnancy: { patientId: id } } } as any }),
         prisma.aNCEncounter.deleteMany({ where: { pregnancy: { patientId: id } } as any }),
         prisma.aNCIntervention.deleteMany({ where: { pregnancy: { patientId: id } } as any }),
@@ -29,11 +26,6 @@ export async function POST(req: Request) {
         prisma.immunization.deleteMany({ where: { patientId: id } }),
         prisma.document.deleteMany({ where: { patientId: id } }),
         prisma.fhirLink.deleteMany({ where: { patientId: id } }),
-
-        prisma.follow.deleteMany({ where: { followerId: id, followerType: 'patient' } as any }),
-        prisma.follow.deleteMany({ where: { followingId: id, followingType: 'patient' } as any }),
-        prisma.comment.deleteMany({ where: { authorId: id, authorType: 'patient' } as any }),
-        prisma.communityPost.deleteMany({ where: { authorId: id, authorType: 'patient' } as any }),
 
         prisma.patient.delete({ where: { id } }),
       ])
