@@ -67,6 +67,53 @@ function formatWhatsApp(text: string): string {
   return t.trim();
 }
 
+function detectAncDangerSigns(text: string): string[] {
+  const t = String(text || "").toLowerCase();
+  const hits: string[] = [];
+  if (/severe\s+headache/.test(t) || (t.includes('headache') && t.includes('severe'))) hits.push('severe headache');
+  if (/blurred\s+vision/.test(t) || (t.includes('vision') && (t.includes('blur') || t.includes('blurry')))) hits.push('blurred vision');
+  if (/(heavy|lots\s+of)\s+(vaginal\s+)?bleeding/.test(t) || (t.includes('bleeding') && t.includes('heavy'))) hits.push('heavy vaginal bleeding');
+  if (/severe\s+(abdominal|stomach)\s+pain/.test(t) || (t.includes('abdominal') && t.includes('pain') && t.includes('severe'))) hits.push('severe abdominal pain');
+  if (/reduced\s+fetal\s+movements?/.test(t) || /baby\s+(not\s+moving|stopped\s+moving|moving\s+less)/.test(t)) hits.push('reduced fetal movements');
+  if (/\bfever\b/.test(t) && (/(38(\.|\s*)?c)/.test(t) || t.includes('102') || t.includes('high fever'))) hits.push('fever');
+  if (/(convulsions?|seizures?)/.test(t)) hits.push('convulsions/seizure');
+  if (/(severe\s+)?short(ness)?\s+of\s+breath/.test(t) || (t.includes('breath') && t.includes('short'))) hits.push('severe shortness of breath');
+  if (/swelling\s+of\s+(face|hands)/.test(t) || (t.includes('swelling') && (t.includes('face') || t.includes('hands')))) hits.push('swelling of face/hands');
+  return Array.from(new Set(hits));
+}
+
+function formatProviderFallback(results: RagSearchResult[], topK: number) {
+  const top = results.slice(0, Math.max(1, Math.min(8, topK)));
+  if (top.length === 0) return 'No relevant lines in sources.';
+
+  const lines: string[] = [];
+  lines.push('Sources:');
+  for (let i = 0; i < top.length; i++) {
+    const r = top[i];
+    const url = r.sourceUrl ? ` — ${r.sourceUrl}` : '';
+    lines.push(`[S${i + 1}] ${r.title}${url}`);
+  }
+
+  lines.push('');
+  lines.push('Quoted lines:');
+  for (let i = 0; i < top.length; i++) {
+    const r = top[i];
+    const raw = String(r.text || '');
+    const excerpt = raw
+      .split(/\r?\n/)
+      .map(s => s.trim())
+      .filter(Boolean)
+      .slice(0, 3);
+    if (excerpt.length === 0) continue;
+    for (const q of excerpt) {
+      // Keep each quote short-ish for WhatsApp readability
+      const clipped = q.length > 240 ? q.slice(0, 235) + '…' : q;
+      lines.push(`- "${clipped}" [S${i + 1}]`);
+    }
+  }
+  return lines.join('\n');
+}
+
 export async function agentRespond(opts: {
   message: string;
   topK?: number;
@@ -116,6 +163,24 @@ export async function agentRespond(opts: {
   // Compose with OpenAI when configured
   let answer = "";
   let billable = false;
+
+  // Rule-based emergency escalation for patients (works even without OpenAI)
+  if (patientScopedPhone) {
+    const danger = detectAncDangerSigns(msg);
+    if (danger.length > 0) {
+      try {
+        await createMedicalEscalation({
+          phoneE164: patientScopedPhone,
+          summary: `ANC danger signs: ${danger.join(', ')} — ${msg}`.slice(0, 180),
+          subjectType: 'patient',
+          subjectId: null,
+        });
+      } catch {}
+      answer = "I've alerted a healthcare provider right away. If this is a life‑threatening emergency, please call your local emergency number.";
+      if (opts.whatsappStyle) answer = formatWhatsApp(answer);
+      return { answer, matches: results, billable: false };
+    }
+  }
   const hasOpenAI = !!process.env.OPENAI_API_KEY;
   try {
     console.log(
@@ -161,21 +226,7 @@ export async function agentRespond(opts: {
       }
     }
     // Raw fallback
-    const top = results.slice(0, Math.max(1, Math.min(8, topK)));
-    if (top.length === 0) {
-      answer = 'No matching technical sources.';
-    } else {
-      const lines: string[] = [];
-      lines.push(`Results (${top.length}):`);
-      for (let i = 0; i < top.length; i++) {
-        const r = top[i];
-        const url = r.sourceUrl ? ` — ${r.sourceUrl}` : '';
-        lines.push(`${i + 1}. ${r.title}${url}`);
-        const snippet = (r.text || '').slice(0, 400).trim();
-        if (snippet) lines.push(snippet);
-      }
-      answer = lines.join('\n');
-    }
+    answer = formatProviderFallback(results, topK);
     if (opts.whatsappStyle) answer = formatWhatsApp(answer);
     return { answer, matches: results, billable: false };
   }
