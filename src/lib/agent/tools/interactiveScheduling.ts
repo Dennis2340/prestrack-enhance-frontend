@@ -126,7 +126,7 @@ export async function startSchedulingSession(
 This session expires in 30 minutes
 
 With care,
-Luna ✨`;
+Prestrack ✨`;
 
   return { session, message };
 }
@@ -197,7 +197,7 @@ export async function processTimeSelection(
 Need to make changes? Reply "reschedule" anytime!
 
 With care,
-Luna ✨`;
+Prestrack ✨`;
 
   return message;
 }

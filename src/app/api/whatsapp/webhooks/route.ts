@@ -20,7 +20,7 @@ function toPhoneE164(chatId?: string) {
   return `+${digits}`
 }
 
-// Visitor onboarding and greeting handled here to avoid duplicated replies
+// WhatsApp webhook handler
 
 export async function POST(req: Request) {
   try {
@@ -132,12 +132,11 @@ export async function POST(req: Request) {
       }
     } catch {}
 
-    // Identify subject and ensure visitor onboarding for unknown users
+    // Identify subject (patient/provider/visitor)
     let isPatient = false
     let isProvider = false
     let patientId: string | null = null
     let visitorId: string | null = null
-    let visitorName: string | null = null
     try {
       const ccP = await prisma.contactChannel.findFirst({ where: { type: 'whatsapp', value: phoneE164, patientId: { not: null } }, select: { patientId: true } })
       if (ccP?.patientId) {
@@ -151,7 +150,6 @@ export async function POST(req: Request) {
           const vis = await prisma.visitor.findFirst({ where: { contacts: { some: { type: 'whatsapp', value: phoneE164 } } }, select: { id: true, displayName: true } })
           if (vis) {
             visitorId = vis.id
-            visitorName = vis.displayName || providerDisplayName
             if (!vis.displayName && providerDisplayName) {
               try {
                 await prisma.visitor.update({ where: { id: vis.id }, data: { displayName: providerDisplayName } })
@@ -160,17 +158,14 @@ export async function POST(req: Request) {
           } else {
             const created = await prisma.visitor.create({ data: { displayName: providerDisplayName, contacts: { create: { ownerType: 'visitor', type: 'whatsapp', value: phoneE164, verified: true, preferred: true } } } })
             visitorId = created.id
-            visitorName = providerDisplayName
           }
         } else {
           const vis = await prisma.visitor.findFirst({ where: { contacts: { some: { type: 'whatsapp', value: phoneE164 } } }, select: { id: true, displayName: true } })
           if (vis) {
             visitorId = vis.id
-            visitorName = vis.displayName || null
           } else {
             const created = await prisma.visitor.create({ data: { displayName: null, contacts: { create: { ownerType: 'visitor', type: 'whatsapp', value: phoneE164, verified: true, preferred: true } } } })
             visitorId = created.id
-            visitorName = null
           }
         }
       }
@@ -197,45 +192,6 @@ export async function POST(req: Request) {
         }
       }
     } catch {}
-
-    if (!isPatient && !isProvider && visitorId) {
-      const nameMissing = !visitorName || !String(visitorName).trim()
-      if (nameMissing) {
-        const raw = incomingText
-        const m = raw.match(/\b(?:my\s+name\s+is|i\s+am|i'm)\s+([a-z][a-z\-']{1,29})\b/i)
-        const single = raw.match(/^\s*([a-z][a-z\-']{1,29})\s*$/i)
-        const extracted = (m && m[1]) ? m[1] : ((single && single[1]) ? single[1] : null)
-        if (extracted) {
-          const name = extracted.trim()
-          try { await prisma.visitor.update({ where: { id: visitorId }, data: { displayName: name } }) } catch {}
-          visitorName = name
-          if (/^\s*([a-z][a-z\-']{1,29})\s*$/i.test(raw)) {
-            const welcome = `Thanks, ${name}. I'm Luna. What can I help you with today?`
-            try {
-              let convo = await prisma.conversation.findFirst({ where: { subjectType: 'visitor' as any, visitorId }, orderBy: { updatedAt: 'desc' } })
-              if (!convo) {
-                convo = await prisma.conversation.create({ data: { subjectType: 'visitor' as any, visitorId, channel: 'whatsapp' as any, status: 'open' as any, lastMessageAt: new Date() } })
-              }
-              await prisma.commMessage.create({ data: { conversationId: convo.id, direction: 'outbound', via: 'whatsapp', body: welcome, senderType: 'agent' } })
-            } catch {}
-            return NextResponse.json({ status: 'ok', answer: welcome })
-          }
-        } else {
-          const ask = `Welcome. What's your first name?`
-          try {
-            let convo = await prisma.conversation.findFirst({ where: { subjectType: 'visitor' as any, visitorId }, orderBy: { updatedAt: 'desc' } })
-            if (!convo) {
-              convo = await prisma.conversation.create({ data: { subjectType: 'visitor' as any, visitorId, channel: 'whatsapp' as any, status: 'open' as any, lastMessageAt: new Date() } })
-            }
-            const last = await prisma.commMessage.findFirst({ where: { conversationId: convo.id, direction: 'outbound', via: 'whatsapp' }, orderBy: { createdAt: 'desc' }, select: { body: true } })
-            if (!last?.body || String(last.body) !== ask) {
-              await prisma.commMessage.create({ data: { conversationId: convo.id, direction: 'outbound', via: 'whatsapp', body: ask, senderType: 'agent' } })
-            }
-          } catch {}
-          return NextResponse.json({ status: 'ok', answer: ask })
-        }
-      }
-    }
 
     // Escalation intent is now handled by the agent via tool-call; avoid regex-based escalation here to prevent duplicates
 

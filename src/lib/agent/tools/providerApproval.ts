@@ -333,7 +333,7 @@ The provider will review your request and confirm shortly. You'll receive the me
 ⏰ *Response expected within 2 hours*
 
 With care,
-Luna ✨`;
+Prestrack ✨`;
 }
 
 function formatConfirmationMessage(request: PendingMeetingRequest, googleMeetEvent: GoogleMeetResponse): string {
@@ -366,7 +366,7 @@ Your consultation with ${request.providerName} has been approved:
 The meeting has been added to the calendar and is ready to go!
 
 With care,
-Luna ✨`;
+Prestrack ✨`;
 }
 
 function formatProviderConfirmationMessage(request: PendingMeetingRequest, googleMeetEvent: GoogleMeetResponse): string {
@@ -418,7 +418,7 @@ Unfortunately, your consultation request with ${request.providerName} for ${requ
 We apologize for any inconvenience.
 
 With care,
-Luna ✨`;
+Prestrack ✨`;
 }
 
 // Helper functions for database operations

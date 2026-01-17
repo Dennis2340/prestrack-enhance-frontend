@@ -1,4 +1,4 @@
-// Meeting scheduling tools for Luna AI agent
+// Meeting scheduling tools for Prestrack AI agent
 import prisma from '@/lib/prisma';
 import { sendWhatsAppViaGateway } from '@/lib/whatsapp';
 import { getGoogleMeetAPI, isGoogleMeetConfigured, createHOAMeeting, GoogleMeetResponse } from '@/lib/googleMeetApi';
@@ -287,7 +287,7 @@ ${reason ? `📝 *Reason:* ${reason}` : ''}${timeInfo}
 This link is ready to use! If you need any changes, just reply here.
 
 With care,
-Luna ✨`;
+Prestrack ✨`;
 }
 
 function formatProviderMessage(
@@ -358,7 +358,7 @@ Hello ${displayName}!
 Ready to schedule? Just tell me your preferred time!
 
 With care,
-Luna ✨`;
+Prestrack ✨`;
 }
 
 // Helper function for Google Meet availability info (fallback)
@@ -387,7 +387,7 @@ Hello ${displayName}!
 Ready to schedule? Just tell me your preferred time!
 
 With care,
-Luna ✨`;
+Prestrack ✨`;
 }
 
 // Helper functions for display name and provider lookup
