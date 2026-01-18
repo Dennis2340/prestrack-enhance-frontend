@@ -60,6 +60,49 @@ function detectAncDangerSigns(text: string): string[] {
   return Array.from(new Set(hits));
 }
 
+function detectGeneralEmergency(text: string): string[] {
+  const t = String(text || "").toLowerCase();
+  const hits: string[] = [];
+  
+  // Cardiovascular emergencies
+  if (/chest\s+pain/.test(t) || (t.includes('chest') && t.includes('pain'))) hits.push('chest pain');
+  if (/heart\s+attack/.test(t) || t.includes('cardiac arrest')) hits.push('heart attack');
+  if (/crushing\s+(chest\s+)?pain/.test(t) || /severe\s+chest\s+pressure/.test(t)) hits.push('severe chest pressure');
+  if (/(can'?t|cannot|unable\s+to)\s+breath/.test(t) || /difficulty\s+breathing/.test(t)) hits.push('difficulty breathing');
+  
+  // Neurological emergencies
+  if (/\bstroke\b/.test(t)) hits.push('stroke');
+  if (/(can'?t|cannot)\s+move\s+(my\s+)?(arm|leg)/.test(t) || /paralysis/.test(t)) hits.push('paralysis/unable to move limb');
+  if (/face\s+droop(ing)?/.test(t) || /one\s+side\s+of\s+face/.test(t)) hits.push('face drooping');
+  if (/loss\s+of\s+consciousness/.test(t) || /passed\s+out/.test(t) || /fainted/.test(t) || /unconscious/.test(t)) hits.push('loss of consciousness');
+  if (/severe\s+dizziness/.test(t) || (t.includes('dizzy') && t.includes('severe'))) hits.push('severe dizziness');
+  
+  // Trauma/Bleeding
+  if (/(heavy|severe|won'?t\s+stop)\s+bleeding/.test(t) || /bleeding\s+(heavily|a\s+lot)/.test(t)) hits.push('heavy bleeding');
+  if (/severe\s+injury/.test(t) || /serious\s+injury/.test(t)) hits.push('severe injury');
+  if (/broken\s+bone/.test(t) || /fractured/.test(t)) hits.push('broken bone/fracture');
+  if (/(car|vehicle|motor)\s+accident/.test(t) || /crash/.test(t)) hits.push('accident/trauma');
+  if (/fell\s+from\s+height/.test(t) || /fell\s+down\s+stairs/.test(t)) hits.push('fall from height');
+  
+  // Respiratory emergencies
+  if (/choking/.test(t) || /can'?t\s+swallow/.test(t)) hits.push('choking');
+  if (/gasping\s+for\s+(air|breath)/.test(t)) hits.push('gasping for air');
+  
+  // Allergic/Toxic
+  if (/severe\s+allergic\s+reaction/.test(t) || /anaphylaxis/.test(t) || /anaphylactic/.test(t)) hits.push('severe allergic reaction');
+  if (/poisoning/.test(t) || /poisoned/.test(t)) hits.push('poisoning');
+  if (/overdose/.test(t) || /took\s+too\s+many/.test(t)) hits.push('overdose');
+  
+  // Severe pain
+  if (/severe\s+pain/.test(t) && !t.includes('abdominal')) hits.push('severe pain');
+  if (/unbearable\s+pain/.test(t) || /excruciating\s+pain/.test(t)) hits.push('unbearable pain');
+  
+  // Burns
+  if (/severe\s+burn/.test(t) || /third\s+degree\s+burn/.test(t)) hits.push('severe burn');
+  
+  return Array.from(new Set(hits));
+}
+
 function formatProviderFallback(results: RagSearchResult[], topK: number) {
   const top = results.slice(0, Math.max(1, Math.min(8, topK)));
   if (top.length === 0) return 'No relevant lines in sources.';
@@ -144,25 +187,93 @@ export async function agentRespond(opts: {
   // Compose with OpenAI when configured
   let answer = "";
   let billable = false;
+  const hasOpenAI = !!process.env.OPENAI_API_KEY;
 
-  // Rule-based emergency escalation for all non-provider users (works even without OpenAI)
-  if (!providerScopedPhone && phoneE164) {
-    const danger = detectAncDangerSigns(msg);
-    if (danger.length > 0) {
+  // AI-driven emergency detection for all non-provider users
+  if (!providerScopedPhone && phoneE164 && hasOpenAI) {
+    try {
+      const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+      const emergencyCheckPrompt = `You are a medical triage assistant. Analyze this patient message and determine if it describes a medical emergency that requires immediate provider notification.
+
+Medical emergencies include:
+- Life-threatening conditions (heart attack, stroke, severe bleeding, difficulty breathing, choking, loss of consciousness)
+- Severe injuries or trauma (accidents, falls, broken bones, severe burns)
+- Pregnancy complications (severe headache with blurred vision, heavy vaginal bleeding, reduced fetal movements, severe abdominal pain)
+- Acute severe symptoms (chest pain, severe allergic reactions, poisoning, overdose, seizures)
+- Any situation where delay could result in serious harm or death
+
+Patient message: "${msg}"
+
+Respond with ONLY a JSON object in this exact format:
+{
+  "isEmergency": true or false,
+  "category": "brief category if emergency, empty string otherwise",
+  "symptoms": ["list of concerning symptoms if emergency, empty array otherwise"]
+}`;
+
+      const emergencyCheck = await client.chat.completions.create({
+        model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+        temperature: 0,
+        messages: [{ role: 'user', content: emergencyCheckPrompt }],
+      });
+
+      const responseText = (emergencyCheck.choices?.[0]?.message?.content || '').trim();
+      let emergencyData: { isEmergency: boolean; category: string; symptoms: string[] } | null = null;
+      
       try {
+        emergencyData = JSON.parse(responseText);
+      } catch {
+        // If JSON parsing fails, try to extract from markdown code block
+        const jsonMatch = responseText.match(/```(?:json)?\s*({[\s\S]*?})\s*```/);
+        if (jsonMatch) {
+          emergencyData = JSON.parse(jsonMatch[1]);
+        }
+      }
+
+      if (emergencyData?.isEmergency) {
+        try {
+          const summary = emergencyData.category 
+            ? `${emergencyData.category}: ${emergencyData.symptoms.join(', ')} — ${msg}`.slice(0, 180)
+            : `Emergency: ${msg}`.slice(0, 180);
+          
+          await createMedicalEscalation({
+            phoneE164: phoneE164,
+            summary,
+            subjectType: patientScopedPhone ? 'patient' : 'visitor',
+            subjectId: null,
+          });
+        } catch {}
+        answer = "I've alerted a healthcare provider right away. If this is a life‑threatening emergency, please call your local emergency number immediately.";
+        if (opts.whatsappStyle) answer = formatWhatsApp(answer);
+        return { answer, matches: results, billable: false };
+      }
+    } catch (e: any) {
+      console.error('[agent] Emergency detection failed:', e?.message);
+      // Fall through to normal response if emergency detection fails
+    }
+  }
+  
+  // Fallback keyword-based emergency detection (when OpenAI unavailable)
+  if (!providerScopedPhone && phoneE164 && !hasOpenAI) {
+    const ancDanger = detectAncDangerSigns(msg);
+    const generalEmergency = detectGeneralEmergency(msg);
+    const allDangerSigns = [...ancDanger, ...generalEmergency];
+    
+    if (allDangerSigns.length > 0) {
+      try {
+        const category = ancDanger.length > 0 ? 'ANC danger signs' : 'Emergency';
         await createMedicalEscalation({
           phoneE164: phoneE164,
-          summary: `ANC danger signs: ${danger.join(', ')} — ${msg}`.slice(0, 180),
+          summary: `${category}: ${allDangerSigns.join(', ')} — ${msg}`.slice(0, 180),
           subjectType: patientScopedPhone ? 'patient' : 'visitor',
           subjectId: null,
         });
       } catch {}
-      answer = "I've alerted a healthcare provider right away. If this is a life‑threatening emergency, please call your local emergency number.";
+      answer = "I've alerted a healthcare provider right away. If this is a life‑threatening emergency, please call your local emergency number immediately.";
       if (opts.whatsappStyle) answer = formatWhatsApp(answer);
       return { answer, matches: results, billable: false };
     }
   }
-  const hasOpenAI = !!process.env.OPENAI_API_KEY;
   try {
     console.log(
       `[agent] message len=%d topK=%d scope=%s patientPhone=%s openai=%s matches=%d`,
