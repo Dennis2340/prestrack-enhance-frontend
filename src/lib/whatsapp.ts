@@ -8,7 +8,6 @@ export function formatE164(phone?: string | null) {
   if (!phone) return undefined;
   const cleaned = String(phone).replace(/[^0-9]/g, "");
   if (!cleaned) return undefined;
-  if (cleaned.startsWith("31466865")) return "+23231466865";
   if (cleaned.startsWith("232")) return `+${cleaned}`;
   return `+232${cleaned}`;
 }

@@ -35,18 +35,6 @@ const Navbar = () => {
         {/* Desktop Navigation */}
         <div className="hidden sm:flex items-center space-x-6">
           <Link
-            href="/admin/providers"
-            className="font-medium text-gray-600 hover:text-green-600 transition-colors duration-300"
-          >
-            Care Providers
-          </Link>
-          <Link
-            href="/admin/rag"
-            className="font-medium text-gray-600 hover:text-green-600 transition-colors duration-300"
-          >
-            RAG Ingestion
-          </Link>
-          <Link
             href="/login"
             className="font-medium text-gray-600 hover:text-green-600 transition-colors duration-300"
           >

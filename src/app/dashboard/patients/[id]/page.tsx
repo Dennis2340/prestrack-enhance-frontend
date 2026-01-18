@@ -88,6 +88,11 @@ export default function PatientDetailPage() {
   const [remTimes, setRemTimes] = useState<string>("09:00\n21:00")
   const [remSubmitting, setRemSubmitting] = useState(false)
   const [remUpcoming, setRemUpcoming] = useState<Array<{ id: string; scheduledTime: string; status: string; notes?: string }>>([])
+  // Patient name editing
+  const [editNameOpen, setEditNameOpen] = useState(false)
+  const [editFirstName, setEditFirstName] = useState("")
+  const [editLastName, setEditLastName] = useState("")
+  const [savingName, setSavingName] = useState(false)
 
   useEffect(() => {
     if (!detail?.patient?.id) return;
@@ -285,7 +290,14 @@ export default function PatientDetailPage() {
     <div className="max-w-5xl space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold">{fullName}</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-semibold">{fullName}</h1>
+            <button onClick={() => {
+              setEditFirstName(detail.patient.firstName || "")
+              setEditLastName(detail.patient.lastName || "")
+              setEditNameOpen(true)
+            }} className="text-sm px-2 py-1 border rounded hover:bg-gray-50">Edit Name</button>
+          </div>
           <div className="text-sm text-gray-600">Phone: {detail.phoneE164 || "-"}</div>
         </div>
         <Dialog.Root open={open} onOpenChange={setOpen}>
@@ -873,6 +885,58 @@ export default function PatientDetailPage() {
           </div>
         </Tabs.Content>
       </Tabs.Root>
+
+      {/* Name Edit Modal */}
+      <Dialog.Root open={editNameOpen} onOpenChange={setEditNameOpen}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 bg-black/40 z-50" />
+          <Dialog.Content className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md bg-white rounded shadow-lg p-4 z-50">
+            <div className="flex items-center justify-between mb-4">
+              <Dialog.Title className="text-lg font-semibold">Edit Patient Name</Dialog.Title>
+              <Dialog.Close asChild>
+                <button className="text-gray-500">✕</button>
+              </Dialog.Close>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium mb-1">First Name</label>
+                <input value={editFirstName} onChange={e => setEditFirstName(e.target.value)} className="border rounded px-3 py-2 w-full" placeholder="First name" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Last Name</label>
+                <input value={editLastName} onChange={e => setEditLastName(e.target.value)} className="border rounded px-3 py-2 w-full" placeholder="Last name" />
+              </div>
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <Dialog.Close asChild>
+                  <button className="px-4 py-2 rounded border">Cancel</button>
+                </Dialog.Close>
+                <button onClick={async () => {
+                  if (!detail?.patient?.id) return
+                  setSavingName(true)
+                  try {
+                    const res = await fetch(`/api/admin/patients/${detail.patient.id}/update`, {
+                      method: 'PATCH',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ firstName: editFirstName || null, lastName: editLastName || null })
+                    })
+                    const d = await res.json()
+                    if (!res.ok) throw new Error(d?.error || 'Failed')
+                    show('Name updated successfully', 'success')
+                    setEditNameOpen(false)
+                    await load()
+                  } catch (e: any) {
+                    show(e?.message || 'Failed to update name', 'error')
+                  } finally {
+                    setSavingName(false)
+                  }
+                }} disabled={savingName} className="px-4 py-2 rounded bg-blue-600 text-white disabled:opacity-50">
+                  {savingName ? 'Saving…' : 'Save'}
+                </button>
+              </div>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
 
     </div>
   )

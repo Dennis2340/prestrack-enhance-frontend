@@ -1,9 +1,22 @@
-"use client"
+'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { uploadFiles } from '@/lib/uploadthing'
 
-type Source = { url: string; addedAt: string; fileId?: string | null; jobId?: string | null; stage?: string; progress?: number; updated?: string }
+type Source = { url: string; addedAt: string; fileId?: string | null; jobId?: string | null; stage?: string; progress?: number; updated?: string; fileName?: string }
+
+function extractFileName(url: string): string {
+  try {
+    const urlObj = new URL(url)
+    const pathname = urlObj.pathname
+    const parts = pathname.split('/')
+    const lastPart = parts[parts.length - 1]
+    if (lastPart && lastPart.length > 0) {
+      return decodeURIComponent(lastPart)
+    }
+  } catch {}
+  return url.split('/').pop() || url
+}
 
 const LS_KEY = 'rag_sources_v1'
 
@@ -90,11 +103,13 @@ export default function DashboardRagIngestionPage() {
       for (const u of allUrls) {
         const existing = next.find(s => s.url === u)
         const jobId = byUrl.get(u) || null
+        const fileName = extractFileName(u)
         if (existing) {
           existing.jobId = jobId
           existing.addedAt = existing.addedAt || now
+          existing.fileName = fileName
         } else {
-          next.unshift({ url: u, addedAt: now, jobId })
+          next.unshift({ url: u, addedAt: now, jobId, fileName })
         }
       }
       saveSources(next)
@@ -127,27 +142,39 @@ export default function DashboardRagIngestionPage() {
 
   return (
     <div className="max-w-4xl">
-      <div className="flex items-center justify-between mb-2">
-        <h1 className="text-2xl font-semibold">RAG Sources</h1>
-        <button onClick={() => setOpen(true)} className="bg-blue-600 text-white px-4 py-2 rounded">Add Sources</button>
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">RAG Sources</h1>
+          <p className="text-sm text-gray-600 mt-1">Manage your knowledge base documents</p>
+        </div>
+        <button onClick={() => setOpen(true)} className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-5 py-2.5 rounded-lg font-medium hover:from-blue-700 hover:to-blue-800 transition-all shadow-sm">Add Sources</button>
       </div>
-      <p className="text-sm text-gray-600 mb-4">Manage your data sources. Add new PDFs via UploadThing or paste URLs. We enqueue ingestion and show status.</p>
 
       <div className="mt-8">
-        <h2 className="text-xl font-semibold mb-2">Data Sources</h2>
-        <div className="mb-2">
-          <button onClick={refreshStatuses} className="px-3 py-1.5 rounded border text-sm">Refresh Status</button>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-semibold">Data Sources</h2>
+          <button onClick={refreshStatuses} className="px-4 py-2 rounded-lg border border-gray-300 text-sm font-medium hover:bg-gray-50 transition-colors">Refresh Status</button>
         </div>
-        <div className="space-y-2">
-          {sources.length === 0 && <div className="text-sm text-gray-500">No sources tracked yet.</div>}
+        <div className="space-y-3">
+          {sources.length === 0 && <div className="text-sm text-gray-500 text-center py-8 border border-dashed rounded-lg">No sources tracked yet. Click "Add Sources" to get started.</div>}
           {sources.map((s) => (
-            <div key={s.url} className="border rounded p-3 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-              <div>
-                <div className="text-sm font-mono break-all">{s.url}</div>
-                <div className="text-xs text-gray-600">Added {new Date(s.addedAt).toLocaleString()} {s.stage ? `• ${s.stage}` : ''} {typeof s.progress === 'number' ? `• ${s.progress}%` : ''}</div>
-              </div>
-              <div className="flex items-center gap-2">
-                <button onClick={() => onDelete(s.url)} className="text-red-600 text-sm hover:underline">Delete</button>
+            <div key={s.url} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow bg-white">
+              <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-2">
+                    <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    <div className="font-medium text-gray-900">{s.fileName || 'Document'}</div>
+                  </div>
+                  <div className="text-xs text-gray-500 font-mono break-all mb-2">{s.url}</div>
+                  <div className="flex items-center gap-3 text-xs text-gray-600">
+                    <span>Added {new Date(s.addedAt).toLocaleDateString()}</span>
+                    {s.stage && <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full">{s.stage}</span>}
+                    {typeof s.progress === 'number' && <span className="font-medium">{s.progress}%</span>}
+                  </div>
+                </div>
+                <button onClick={() => onDelete(s.url)} className="px-3 py-1.5 text-sm text-red-600 border border-red-300 rounded-lg hover:bg-red-50 transition-colors">Delete</button>
               </div>
             </div>
           ))}
@@ -157,25 +184,31 @@ export default function DashboardRagIngestionPage() {
       {/* Modal */}
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setOpen(false)} />
-          <div className="relative bg-white w-full max-w-2xl rounded shadow-lg p-4">
-            <div className="flex items-center justify-between mb-2">
-              <h2 className="text-lg font-semibold">Add Sources</h2>
-              <button onClick={() => setOpen(false)} className="text-gray-500">✕</button>
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setOpen(false)} />
+          <div className="relative bg-white w-full max-w-2xl rounded-xl shadow-2xl p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-gray-900">Add Sources</h2>
+              <button onClick={() => setOpen(false)} className="text-gray-400 hover:text-gray-600 transition-colors">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
             </div>
-            <div className="space-y-4">
+            <div className="space-y-5">
               <div>
-                <label className="block text-sm font-medium mb-1">Upload PDF files</label>
-                <input type="file" accept="application/pdf" multiple onChange={onSelect} />
-                {fileInputs && <div className="text-xs text-gray-500 mt-1">Selected: {fileInputs || 'none'}</div>}
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Upload PDF files</label>
+                <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 hover:border-blue-400 transition-colors">
+                  <input type="file" accept="application/pdf" multiple onChange={onSelect} className="w-full" />
+                  {fileInputs && <div className="text-xs text-gray-600 mt-2 font-medium">Selected: {fileInputs || 'none'}</div>}
+                </div>
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">Or paste URLs (one per line)</label>
-                <textarea value={urls} onChange={(e) => setUrls(e.target.value)} placeholder="https://example.com/doc.pdf\nhttps://cdn.site/file.txt" className="border rounded px-3 py-2 w-full h-32" />
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Or paste URLs (one per line)</label>
+                <textarea value={urls} onChange={(e) => setUrls(e.target.value)} placeholder="https://example.com/doc.pdf\nhttps://cdn.site/file.txt" className="border border-gray-300 rounded-lg px-4 py-3 w-full h-32 focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
               </div>
-              <div className="flex items-center justify-end gap-2">
-                <button type="button" onClick={() => setOpen(false)} className="px-4 py-2 rounded border">Cancel</button>
-                <button onClick={async () => { await handleUploadThenIngest(); setOpen(false); }} disabled={uploading || ingesting || (files.length === 0 && !urls.trim())} className="bg-blue-600 text-white px-4 py-2 rounded disabled:opacity-50">
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button type="button" onClick={() => setOpen(false)} className="px-5 py-2.5 rounded-lg border border-gray-300 font-medium hover:bg-gray-50 transition-colors">Cancel</button>
+                <button onClick={async () => { await handleUploadThenIngest(); setOpen(false); }} disabled={uploading || ingesting || (files.length === 0 && !urls.trim())} className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-5 py-2.5 rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:from-blue-700 hover:to-blue-800 transition-all shadow-sm">
                   {uploading || ingesting ? 'Processing…' : 'Upload & Enqueue'}
                 </button>
               </div>
