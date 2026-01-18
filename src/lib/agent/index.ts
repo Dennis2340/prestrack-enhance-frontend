@@ -116,14 +116,17 @@ export async function agentRespond(opts: {
   let providerScopedPhone: string | undefined = undefined;
   try {
     if (phoneE164) {
+      console.log(`[agent->scope] Looking up phone: ${phoneE164}`);
       const cc = await prisma.contactChannel.findFirst({
         where: { type: 'whatsapp', value: phoneE164, ownerType: 'patient' },
         select: { id: true, patientId: true },
       });
+      console.log(`[agent->scope] ContactChannel result:`, cc);
       if (cc?.patientId) patientScopedPhone = phoneE164;
       if (!patientScopedPhone) {
         // Detect provider via providerProfile.phoneE164
         const prov = await prisma.providerProfile.findFirst({ where: { phoneE164: phoneE164 as any }, select: { id: true } });
+        console.log(`[agent->scope] ProviderProfile result:`, prov);
         if (prov?.id) providerScopedPhone = phoneE164;
       }
     }
@@ -142,15 +145,15 @@ export async function agentRespond(opts: {
   let answer = "";
   let billable = false;
 
-  // Rule-based emergency escalation for patients (works even without OpenAI)
-  if (patientScopedPhone) {
+  // Rule-based emergency escalation for all non-provider users (works even without OpenAI)
+  if (!providerScopedPhone && phoneE164) {
     const danger = detectAncDangerSigns(msg);
     if (danger.length > 0) {
       try {
         await createMedicalEscalation({
-          phoneE164: patientScopedPhone,
+          phoneE164: phoneE164,
           summary: `ANC danger signs: ${danger.join(', ')} — ${msg}`.slice(0, 180),
-          subjectType: 'patient',
+          subjectType: patientScopedPhone ? 'patient' : 'visitor',
           subjectId: null,
         });
       } catch {}

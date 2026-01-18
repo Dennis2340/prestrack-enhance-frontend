@@ -138,10 +138,13 @@ export async function POST(req: Request) {
     let patientId: string | null = null
     let visitorId: string | null = null
     try {
+      console.log(`[webhook] Looking up phone: ${phoneE164}`);
       const ccP = await prisma.contactChannel.findFirst({ where: { type: 'whatsapp', value: phoneE164, patientId: { not: null } }, select: { patientId: true } })
+      console.log(`[webhook] ContactChannel lookup result:`, ccP);
       if (ccP?.patientId) {
         isPatient = true
         patientId = ccP.patientId
+        console.log(`[webhook] Detected as PATIENT, patientId: ${patientId}`);
       } else {
         const prov = await prisma.providerProfile.findFirst({ where: { phoneE164: phoneE164 as any }, select: { id: true, user: { select: { name: true } } } as any })
         if (prov?.id) {
