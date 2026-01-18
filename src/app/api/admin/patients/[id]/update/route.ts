@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 
-export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+export async function PATCH(req: Request, context: { params: Promise<{ id: string }> }) {
   try {
     const { firstName, lastName } = await req.json().catch(() => ({}))
+    const params = await context.params
     const patientId = params.id
     
     if (!patientId) {
