@@ -31,7 +31,7 @@ export async function enqueueIngestion(input: {
     const text = await res.text()
     throw new Error(`Ingestion request failed: ${res.status} ${text}`)
   }
-  return res.json() as Promise<{ jobs: Array<{ jobId: string; url: string }> }>
+  return res.json() as Promise<{ jobs: Array<{ jobId: string; url: string; fileId?: string }> }>
 }
 
 export async function getJob(jobId: string) {
@@ -42,6 +42,7 @@ export async function getJob(jobId: string) {
   }
   return res.json() as Promise<{
     jobId: string
+    fileId?: string
     message?: string
     progress?: number
     stage?: string
@@ -82,40 +83,30 @@ export async function embeddingsSearch(input: {
   }>
 }
 
-export async function deleteFile(input: { url?: string; fileId?: string; namespace?: string }) {
-  // Preferred path: delete by fileId via /api/v1/files/{fileId}
-  if (input.fileId) {
-    const path = `/api/v1/files/${encodeURIComponent(input.fileId)}`
-    // Some servers accept DELETE with JSON body; include namespace when provided
-    const res = await genelineFetch(path, {
-      method: 'DELETE',
-      headers: input.namespace ? { 'Content-Type': 'application/json' } : undefined,
-      body: input.namespace ? JSON.stringify({ namespace: input.namespace }) : undefined,
-    })
-    if (!res.ok) {
-      const text = await res.text()
-      throw new Error(`Delete file by id failed: ${res.status} ${text}`)
-    }
-    return res.json().catch(() => ({}))
+export async function deleteFile(input: { fileId: string; namespace?: string; indexName?: string }) {
+  if (!input.fileId) {
+    throw new Error('deleteFile requires fileId')
   }
 
-  // Fallback: purge by URL
-  if (input.url) {
-    const body: Record<string, any> = { url: input.url }
-    if (input.namespace) body.namespace = input.namespace
-    const res = await genelineFetch('/api/v1/files/purge', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    })
-    if (!res.ok) {
-      const text = await res.text()
-      throw new Error(`Purge by URL failed: ${res.status} ${text}`)
-    }
-    return res.json().catch(() => ({}))
+  const namespace = input.namespace || process.env.GENELINE_X_NAMESPACE || 'default'
+  const indexName = input.indexName || process.env.GENELINE_X_INDEX_NAME || 'default'
+  
+  const path = `/api/v1/files/${encodeURIComponent(input.fileId)}`
+  const res = await genelineFetch(path, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      indexName,
+      namespace,
+    }),
+  })
+  
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`Delete file failed: ${res.status} ${text}`)
   }
-
-  throw new Error('deleteFile requires url or fileId')
+  
+  return res.json().catch(() => ({ deleted: true }))
 }
 
 // Send a message to a chatbot and stream plain-text AI response

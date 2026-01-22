@@ -58,7 +58,13 @@ export default function DashboardRagIngestionPage() {
           const res = await fetch(`/api/admin/geneline/job?id=${encodeURIComponent(String(s.jobId))}`)
           if (!res.ok) return s
           const data = await res.json()
-          return { ...s, stage: data.stage || s.stage, progress: typeof data.progress === 'number' ? data.progress : s.progress, updated: data.updated || s.updated }
+          return { 
+            ...s, 
+            fileId: data.fileId || s.fileId,
+            stage: data.stage || s.stage, 
+            progress: typeof data.progress === 'number' ? data.progress : s.progress, 
+            updated: data.updated || s.updated 
+          }
         } catch { return s }
       }))
       const merged = sources.map(s => {
@@ -96,20 +102,23 @@ export default function DashboardRagIngestionPage() {
       const data = await resp.json()
       if (!resp.ok) throw new Error(data?.error || 'Failed to enqueue ingestion')
       const now = new Date().toISOString()
-      const jobs = (data.jobs || []) as Array<{ jobId: string; url: string }>
-      // Merge into sources, attaching jobId by URL
-      const byUrl = new Map(jobs.map(j => [j.url, j.jobId]))
+      const jobs = (data.jobs || []) as Array<{ jobId: string; url: string; fileId?: string }>
+      // Merge into sources, attaching jobId and fileId by URL
+      const byUrl = new Map(jobs.map(j => [j.url, { jobId: j.jobId, fileId: j.fileId }]))
       const next = [...sources]
       for (const u of allUrls) {
         const existing = next.find(s => s.url === u)
-        const jobId = byUrl.get(u) || null
+        const jobData = byUrl.get(u)
+        const jobId = jobData?.jobId || null
+        const fileId = jobData?.fileId || null
         const fileName = extractFileName(u)
         if (existing) {
           existing.jobId = jobId
+          existing.fileId = fileId
           existing.addedAt = existing.addedAt || now
           existing.fileName = fileName
         } else {
-          next.unshift({ url: u, addedAt: now, jobId, fileName })
+          next.unshift({ url: u, addedAt: now, jobId, fileId, fileName })
         }
       }
       saveSources(next)
@@ -123,17 +132,26 @@ export default function DashboardRagIngestionPage() {
     }
   }, [files, urls, sources, saveSources])
 
-  const onDelete = useCallback(async (url: string) => {
+  const onDelete = useCallback(async (source: Source) => {
     if (!confirm('Delete this source from the vector store?')) return
+    
+    // Prefer fileId, fallback to generating from URL
+    const fileId = source.fileId || source.url
+    
+    if (!fileId) {
+      alert('Cannot delete: missing fileId')
+      return
+    }
+    
     try {
       const resp = await fetch('/api/admin/geneline/delete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url }),
+        body: JSON.stringify({ fileId }),
       })
       const data = await resp.json()
       if (!resp.ok) throw new Error(data?.error || 'Delete failed')
-      const next = sources.filter(s => s.url !== url)
+      const next = sources.filter(s => s.url !== source.url)
       saveSources(next)
     } catch (e: any) {
       alert(e?.message || 'Delete failed')
@@ -174,7 +192,7 @@ export default function DashboardRagIngestionPage() {
                     {typeof s.progress === 'number' && <span className="font-medium">{s.progress}%</span>}
                   </div>
                 </div>
-                <button onClick={() => onDelete(s.url)} className="px-3 py-1.5 text-sm text-red-600 border border-red-300 rounded-lg hover:bg-red-50 transition-colors">Delete</button>
+                <button onClick={() => onDelete(s)} className="px-3 py-1.5 text-sm text-red-600 border border-red-300 rounded-lg hover:bg-red-50 transition-colors">Delete</button>
               </div>
             </div>
           ))}
